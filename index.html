@@ -1,0 +1,1968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EQ UI Workbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: a craftsman's workbench — quiet, precise, the window under edit is the hero
+   IDEA: a jeweller's bench lit from above: dark stone surround, the UI piece on a cutting mat
+   PICTURE: the live EQ window rendered from the user's own files, with handles and anchors
+   COLOUR and TYPE: basalt greys, one brass accent, teal for anchors; Cinzel title only, Inter everywhere else
+   LAYOUT: three panes — library left, canvas centre, inspector right; stacks on narrow screens */
+:root{color-scheme:dark;--bg:#14161b;--panel:#1b1e25;--panel2:#22262f;--line:#2e333e;--ink:#e7e2d7;--mute:#9a9da6;--brass:#d6a849;--brass2:#f1c66b;--teal:#4cc3b5;--red:#e5675b;--sel:#d6a84933}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.45 Inter,system-ui,Segoe UI,sans-serif;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer;min-height:30px}
+button:hover{border-color:#4a505d}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
+button.pri{background:var(--brass);color:#1b1608;border-color:var(--brass);font-weight:600}
+button.pri:hover{background:var(--brass2)}
+button:disabled{opacity:.45;cursor:default}
+button.on{border-color:var(--brass);color:var(--brass2)}
+input,select,textarea{background:#12141a;border:1px solid var(--line);border-radius:5px;padding:4px 6px;min-height:28px}
+input[type=checkbox]{min-height:auto}
+input[type=color]{padding:0 2px;width:34px;height:26px}
+/* Named areas: only header, main and footer may take grid rows, so nothing added later can steal the editor's space */
+#app{display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-areas:'head' 'main' 'foot';height:100%}
+#app>header{grid-area:head}#app>main{grid-area:main}#app>footer{grid-area:foot}
+header{display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+header h1{font:600 17px Cinzel,serif;margin:0 10px 0 2px;color:var(--brass2);letter-spacing:.02em;white-space:nowrap}
+header .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
+header label{display:flex;align-items:center;gap:5px;color:var(--mute);white-space:nowrap}
+.grow{flex:1}
+main{display:grid;grid-template-columns:260px minmax(0,1fr) 340px;min-height:0}
+aside{background:var(--panel);display:flex;flex-direction:column;min-height:0}
+#left{border-right:1px solid var(--line)}#right{border-left:1px solid var(--line)}
+.ph{padding:8px 10px;border-bottom:1px solid var(--line);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ph h2{font-size:12px;font-weight:600;margin:0;color:var(--mute);flex:1}
+#list,#tree,#props{overflow:auto;min-height:0}
+#list{flex:1}
+.it{display:flex;gap:6px;align-items:baseline;padding:4px 10px;cursor:pointer;border-left:2px solid transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.it:hover{background:#ffffff08}.it.cur{background:var(--sel);border-left-color:var(--brass)}
+.it .t{font-size:10px;color:var(--mute);flex:none;width:28px}
+.it .n{overflow:hidden;text-overflow:ellipsis}
+.it .d{color:var(--brass2);font-size:10px}
+#center{position:relative;min-height:0;background:#0f1115}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:default;touch-action:none}
+#crumbs{position:absolute;left:10px;top:8px;right:10px;display:flex;gap:6px;align-items:center;pointer-events:none;flex-wrap:wrap}
+#crumbs>*{pointer-events:auto}
+.chip{background:#000a;border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:12px;color:var(--mute)}
+.chip b{color:var(--ink);font-weight:600}
+#tree{max-height:34%;border-bottom:1px solid var(--line);padding:4px 0}
+.tn{padding:2px 8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.tn:hover{background:#ffffff08}.tn.cur{background:var(--sel);color:var(--brass2)}
+.tn .t{color:var(--mute);font-size:10px;margin-right:4px}
+.tn.miss{color:var(--red)}.tn.hid{opacity:.55}
+.tabs{display:flex;gap:2px;padding:6px 8px 0;border-bottom:1px solid var(--line)}
+.tabs button{border-radius:6px 6px 0 0;border-bottom:0;min-height:28px}
+.tabs button.on{background:var(--panel2);color:var(--brass2)}
+#props{flex:1;padding:8px 10px 40px}
+#xmlbox{flex:1;display:none;flex-direction:column;padding:8px;gap:6px;min-height:0}
+#xmltxt{flex:1;font:12px/1.4 ui-monospace,Consolas,monospace;white-space:pre;resize:none;tab-size:4}
+.hd{margin-bottom:8px}
+.hd .ty{display:inline-block;font-size:11px;color:#1b1608;background:var(--brass);border-radius:4px;padding:1px 6px;font-weight:600}
+.hd .nm{font-size:15px;font-weight:600;margin:4px 0 2px;word-break:break-all}
+.hd .meta{color:var(--mute);font-size:11px}
+.acts{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+details.grp{border-top:1px solid var(--line);padding:6px 0}
+details.grp>summary{cursor:pointer;color:var(--mute);font-size:11px;font-weight:600;padding:2px 0}
+.row{display:grid;grid-template-columns:118px minmax(0,1fr) auto;gap:6px;align-items:center;margin:3px 0}
+.row>label{color:var(--mute);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row.set>label{color:var(--ink)}
+.row input:not([type=checkbox]):not([type=color]),.row select{width:100%}
+.x{background:none;border:0;color:var(--mute);padding:0 4px;min-height:24px}.x:hover{color:var(--red)}
+.go{background:none;border:0;color:var(--teal);padding:0 4px;min-height:24px}
+.sub{border-left:2px solid var(--line);margin:4px 0 6px 4px;padding-left:8px}
+.sub>.sl{color:var(--mute);font-size:11px;display:flex;gap:6px;align-items:center;margin:4px 0}
+.pair{display:flex;gap:4px;align-items:center}.pair input{width:100%}
+.quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:6px 0}
+.quick label{font-size:10px;color:var(--mute);display:flex;flex-direction:column;gap:2px}
+.anch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 8px;margin:6px 0;font-size:12px}
+.anch label{display:flex;gap:6px;align-items:center;color:var(--mute)}
+.note{color:var(--mute);font-size:11px;margin:6px 0}
+.warn{color:#f0b46a}
+footer{display:flex;gap:16px;padding:4px 12px;border-top:1px solid var(--line);background:var(--panel);color:var(--mute);font-size:11px;white-space:nowrap;overflow:hidden}
+footer #msg{flex:1;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+#empty{position:absolute;inset:0;display:grid;place-items:center;padding:24px}
+#empty .card{max-width:560px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:28px}
+#empty h2{font:600 26px/1.1 Cinzel,serif;margin:0 0 10px;color:var(--brass2)}
+#empty p{color:var(--mute);margin:8px 0;font-size:14px}
+#empty code{color:var(--ink);background:#0008;padding:1px 5px;border-radius:4px}
+#empty .drop{margin-top:16px;border:1px dashed #4a505d;border-radius:10px;padding:16px;text-align:center;color:var(--mute)}
+#empty.over .drop{border-color:var(--brass);color:var(--brass2)}
+.modal{position:fixed;inset:0;background:#000a;display:none;place-items:center;z-index:9;padding:16px}
+.modal.open{display:grid}
+.modal .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;width:min(640px,100%);max-height:86vh;overflow:auto}
+.modal h3{margin:0 0 8px;font:600 18px Cinzel,serif;color:var(--brass2)}
+.modal ul{padding-left:18px;margin:8px 0}
+.modal li{margin:3px 0}
+.prob{cursor:pointer}.prob:hover{color:var(--brass2)}
+.bar{position:fixed;top:0;left:0;z-index:20;height:3px;background:var(--brass);width:0;transition:width .2s;pointer-events:none}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:transparent;min-height:30px}
+.seg button.on{background:var(--brass);color:#1b1608;font-weight:600}
+body[data-app=layout] .m-d{display:none!important}
+body[data-app=design] .m-l{display:none!important}
+.pane{display:flex;flex-direction:column;min-height:0;flex:1}
+.chk{display:flex;gap:10px;flex-wrap:wrap;padding:6px 10px;border-bottom:1px solid var(--line);font-size:12px;color:var(--mute)}
+.chk label{display:flex;gap:4px;align-items:center}
+.lg{padding:8px 10px 2px;font-size:11px;font-weight:600;color:var(--mute)}
+.lw{display:flex;gap:6px;align-items:center;padding:3px 10px;cursor:pointer;white-space:nowrap;border-left:2px solid transparent}
+.lw:hover{background:#ffffff08}.lw.cur{background:var(--sel);border-left-color:var(--brass)}
+.lw .n{flex:1;overflow:hidden;text-overflow:ellipsis}
+.badge{font-size:10px;border-radius:4px;padding:0 5px;border:1px solid var(--line);color:var(--mute)}
+.badge.on{color:#1b1608;background:var(--teal);border-color:var(--teal)}
+.badge.warn{color:#f0b46a;border-color:#6a5130}
+@media (max-width:1000px){main{grid-template-columns:220px minmax(0,1fr) 300px}}
+@media (max-width:760px){body{overflow:auto}#app{height:auto}main{grid-template-columns:1fr;grid-template-rows:240px 60vh auto}#left,#right{border:0;border-bottom:1px solid var(--line)}#tree{max-height:200px}}
+@media (prefers-reduced-motion:reduce){.bar{transition:none}}
+</style>
+</head>
+<body data-app="layout">
+<div id="app">
+<header>
+  <h1>EQ UI Workbench</h1>
+  <div class="seg"><button id="mLayout" class="on">Screen layout</button><button id="mDesign">Window designer</button></div>
+  <span class="sep"></span>
+  <button class="pri m-l" id="bOpenIni">Open layout .ini</button>
+  <input type="file" id="fIni" accept=".ini" multiple hidden>
+  <label class="m-l">File <select id="sIni" disabled></select></label>
+  <label class="m-l">Screen <input id="iW" type="number" value="2194" style="width:70px"> × <input id="iH" type="number" value="1234" style="width:70px"></label>
+  <button class="m-l" id="bBg" title="Load a game screenshot behind the layout to check positions">Screenshot</button>
+  <input type="file" id="fBg" accept="image/*" hidden>
+  <input class="m-l" id="rBg" type="range" min="0" max="100" value="50" title="Screenshot opacity" style="width:80px;display:none">
+  <button class="m-l" id="bMeasure" style="display:none" title="Find where each window's visible panel starts in the screenshot, for snapping visible edges">Measure edges</button>
+  <button id="bOpen">Open uifiles folder</button>
+  <input type="file" id="fDir" webkitdirectory directory multiple hidden>
+  <label>Skin <select id="sSkin" disabled></select></label>
+  <label class="m-d">Set <select id="sRoot" disabled><option value="EQUI.xml">In-game (EQUI.xml)</option><option value="EQLSUI.xml">Login (EQLSUI.xml)</option></select></label>
+  <span class="sep"></span>
+  <button id="bUndo" title="Undo (Ctrl+Z)" disabled>Undo</button>
+  <button id="bRedo" title="Redo (Ctrl+Y)" disabled>Redo</button>
+  <span class="sep"></span>
+  <button id="bFit" title="Fit (F)">Fit</button>
+  <label class="m-d">Grid <select id="sGrid"><option>0</option><option>1</option><option>2</option><option selected>4</option><option>8</option><option>16</option></select></label>
+  <button id="bSnap" class="on" title="Snap while dragging (hold Alt to place freely)">Snap</button>
+  <select id="sSnapEdge" class="m-l" title="Which edge of a window snaps: its outer edge as stored in the file, or the edge of its visible panel"><option value="outer">to outer edges</option><option value="visible">to visible edges</option></select>
+  <button id="bOut" class="on m-d" title="Outline every piece">Outlines</button>
+  <button id="bHid" class="m-d" title="Show pieces with AutoDraw=false">Hidden</button>
+  <button id="bSmooth" class="m-d" title="Smooth texture scaling">Smooth</button>
+  <span class="grow"></span>
+  <button id="bCheck" class="m-d" disabled>Check</button>
+  <button class="pri" id="bSave" disabled>Save</button>
+</header>
+<div class="bar" id="prog"></div>
+<main>
+  <aside id="left">
+    <div class="pane m-l">
+      <div class="ph"><input id="lq" placeholder="Search windows" style="flex:1"></div>
+      <div class="chk"><label><input type="checkbox" id="cDemand"> on-demand</label><label><input type="checkbox" id="cLHid"> hidden</label><label><input type="checkbox" id="cLab" checked> labels</label><label title="Off: each window is drawn as just its visible panel"><input type="checkbox" id="cArt" checked> skin art</label></div>
+      <div id="llist" style="flex:1;overflow:auto"></div>
+    </div>
+    <div class="pane m-d">
+    <div class="ph"><input id="q" placeholder="Search windows and items" style="flex:1" disabled></div>
+    <div class="ph"><select id="sType" style="flex:1" disabled><option value="@top">Top-level windows</option><option value="Screen">All screens</option><option value="*">Every item</option></select></div>
+    <div id="list"></div>
+    </div>
+  </aside>
+  <section id="center">
+    <canvas id="cv"></canvas>
+    <div id="crumbs"></div>
+    <div id="lempty" class="m-l" style="position:absolute;inset:0;display:grid;place-items:center;padding:24px">
+      <div class="card" style="max-width:580px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:28px">
+        <h2 style="font:600 26px/1.1 Cinzel,serif;margin:0 0 10px;color:var(--brass2)">Arrange your windows on screen</h2>
+        <p class="note" style="font-size:14px">1. <b>Open layout .ini</b> and choose a loadout file from <code>D:\EverQuest Legends</code>, such as <code>UI_Hafa_halas_LO1.ini</code>. You can pick several loadouts at once, and <code>eqclient.ini</code> too, so your screen size is filled in.</p>
+        <p class="note" style="font-size:14px">2. Optional but recommended: <b>Open uifiles folder</b>. Windows then show your skin's real artwork, and windows that don't store a size get the correct one.</p>
+        <p class="note" style="font-size:14px">Files are only read. Saving gives you a .zip with the new loadout file plus an untouched backup of the original.</p>
+      </div>
+    </div>
+    <div id="empty" class="m-d">
+      <div class="card">
+        <h2>Edit your EverQuest windows visually</h2>
+        <p>Choose your <code>uifiles</code> folder, for example <code>D:\EverQuest Legends\uifiles</code>. Every skin inside it shows up in the Skin menu, and any file a skin is missing falls back to <code>default</code>, the same way the game does.</p>
+        <p>Your files are only read. Nothing is written back to your game folder: <b>Save</b> gives you a .zip with the edited files plus a backup copy of every original they replace.</p>
+        <div class="drop" id="drop">or drop the uifiles folder here</div>
+      </div>
+    </div>
+  </section>
+  <aside id="right">
+    <div class="pane m-l"><div class="ph"><h2>Window</h2></div><div id="lprops" style="flex:1;overflow:auto;padding:8px 10px 40px"></div></div>
+    <div class="pane m-d">
+    <div class="ph"><h2>Structure</h2></div>
+    <div id="tree"></div>
+    <div class="tabs"><button id="tProps" class="on">Properties</button><button id="tXml">XML</button><span class="grow"></span><label style="color:var(--mute);font-size:11px;display:flex;gap:4px;align-items:center;padding:0 4px"><input type="checkbox" id="cSet" checked> set fields only</label></div>
+    <div id="props"><p class="note">Select a window from the list, then click any piece on the canvas.</p></div>
+    <div id="xmlbox"><textarea id="xmltxt" spellcheck="false"></textarea><div class="acts"><button class="pri" id="bXml">Apply XML</button><span id="xmlerr" class="note warn"></span></div></div>
+    </div>
+  </aside>
+</main>
+<footer><span id="msg">Ready.</span><span id="pos"></span><span id="zoom"></span></footer>
+</div>
+
+<div class="modal" id="mSave"><div class="box">
+  <h3>Save changes</h3>
+  <div id="saveList"></div>
+  <div class="row" style="grid-template-columns:140px 1fr"><label>Save into skin folder</label><input id="saveSkin"></div>
+  <p class="note" id="saveNote"></p>
+  <p class="note">The .zip holds two folders. <b id="zA">skin</b>/ has your edited files, ready to copy into <code>uifiles</code>. <b id="zB">_backup</b>/ has the untouched original of every one of those files, so you can always put things back.</p>
+  <div class="acts"><button class="pri" id="bZip">Download .zip</button><button id="bCopy">Copy selected file's XML</button><button id="bSaveX">Close</button><span id="saveMsg" class="note"></span></div>
+</div></div>
+<div class="modal" id="mLSave"><div class="box">
+  <h3>Save layout</h3>
+  <p class="note" id="lsSrc"></p>
+  <div class="row" style="grid-template-columns:150px 1fr"><label>Save as loadout #</label><input id="lsNum" type="number" min="1" max="99"></div>
+  <div class="row" style="grid-template-columns:150px 1fr"><label>File name</label><input id="lsName"></div>
+  <p class="note" id="lsNote"></p>
+  <p class="note">The .zip holds the new file, plus a <b>_backup</b> folder with the original of every loaded file it could replace. <b>Close EverQuest, or sit at character select, before copying it in</b>: the game rewrites this file when you camp or exit, and would overwrite your changes.</p>
+  <div class="acts"><button class="pri" id="lsZip">Download .zip</button><button id="lsCopy">Copy file text</button><button id="lsX">Close</button><span id="lsMsg" class="note"></span></div>
+</div></div>
+<div class="modal" id="mProb"><div class="box"><h3>Problems</h3><div id="probList"></div><div class="acts"><button id="bProbX">Close</button></div></div></div>
+<div class="modal" id="mAsk"><div class="box"><h3 id="askT">Are you sure?</h3><p id="askM" class="note" style="font-size:14px"></p><div class="acts"><button class="pri" id="askY">Continue</button><button id="askN">Cancel</button></div></div></div>
+
+<script>
+{
+'use strict';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const low=s=>String(s||'').trim().toLowerCase();
+
+/* ---------------- state ---------------- */
+const S={files:new Map(),skins:[],skin:'default',rootFile:'EQUI.xml',docs:[],items:new Map(),schema:{},
+  tex:new Map(),texInfo:new Map(),mode:'none',rootEntry:null,tree:null,nodes:[],nodeByEl:new Map(),
+  sel:null,hover:null,view:{z:2,px:40,py:40},grid:4,snap:true,outlines:true,hidden:false,smooth:false,onlySet:true,
+  undo:[],redo:[],orig:new Map(),pages:new Map(),users:null,dl:new Map(),frameIdx:0,history:[],problems:[],topNames:new Set()};
+const PIECE=new Set(['Screen','StaticAnimation','StaticTintedBlendAnimation','StaticText','StaticFrame','StaticHeader','Listbox','Button','Gauge','SpellGem','InvSlot','Editbox','Slider','Label','STMLbox','TreeView','Combobox','Page','TabBox','LayoutBox','HorizontalLayoutBox','VerticalLayoutBox','FinderBox','TileLayoutBox','TemplateContainer','HotButton','DragBox','TemplateScreen','StaticScreenPiece','Control','ScreenPiece']);
+const ABBR={Screen:'WIN',Label:'LBL',Button:'BTN',Gauge:'GAU',InvSlot:'INV',StaticAnimation:'ANI',StaticText:'TXT',Listbox:'LST',Editbox:'EDT',Combobox:'CMB',Page:'PG',TabBox:'TAB',Slider:'SLD',SpellGem:'GEM',STMLbox:'STM',Ui2DAnimation:'A2D',TextureInfo:'TEX',WindowDrawTemplate:'WDT',ButtonDrawTemplate:'BDT',FrameTemplate:'FRM',HotButton:'HOT',DragBox:'DRG',VerticalLayoutBox:'VLB',HorizontalLayoutBox:'HLB',TileLayoutBox:'TLB'};
+const FONT={0:9,1:10,2:11,3:12,4:13,5:15,6:18};
+const msg=t=>{$('#msg').textContent=t};
+
+/* ---------------- files ---------------- */
+function addFile(f,rel){
+  const parts=rel.split('/').filter(Boolean);let skin;
+  if(parts.length===2) skin=parts[0]; else if(parts.length===3) skin=parts[1]; else if(parts.length===1) skin='default'; else return;
+  if(!S.files.has(skin)) S.files.set(skin,new Map());
+  S.files.get(skin).set(parts[parts.length-1].toLowerCase(),f);
+}
+function fileFor(name,skin=S.skin){
+  const n=low(name);if(!n) return null;
+  for(const sk of skin==='default'?['default']:[skin,'default']){
+    const m=S.files.get(sk);if(m&&m.has(n)) return {file:m.get(n),skin:sk};
+  }
+  return null;
+}
+async function readDropped(items){
+  const out=[];
+  const walk=(entry,path)=>new Promise(res=>{
+    if(entry.isFile){entry.file(f=>{out.push([f,path+entry.name]);res()},()=>res())}
+    else if(entry.isDirectory){const r=entry.createReader();const all=[];
+      const next=()=>r.readEntries(async es=>{if(!es.length){for(const e of all) await walk(e,path+entry.name+'/');res()}else{all.push(...es);next()}},()=>res());next()}
+    else res();
+  });
+  for(const it of items){const e=it.webkitGetAsEntry&&it.webkitGetAsEntry();if(e) await walk(e,'')}
+  return out;
+}
+async function ingest(pairs){
+  S.files.clear();
+  for(const [f,rel] of pairs){if(/\.(xml|tga|dds|png|jpg|jpeg|bmp)$/i.test(rel)) addFile(f,rel)}
+  S.skins=[...S.files.keys()].filter(k=>[...S.files.get(k).keys()].some(n=>n.endsWith('.xml'))).sort((a,b)=>a==='default'?-1:b==='default'?1:a.localeCompare(b));
+  if(!S.skins.length){msg('No EverQuest UI XML files found in that folder. Pick the uifiles folder (or one skin folder inside it).');return}
+  if(!S.files.has('default')) msg('Note: no "default" folder found, so missing files cannot fall back to default.');
+  $('#sSkin').innerHTML=S.skins.map(s=>`<option>${esc(s)}</option>`).join('');
+  S.skin=S.skins.includes('default')?'default':S.skins[0];
+  {const ls=L.cur&&iget(L.cur,'Main','UISkin');if(ls&&S.skins.includes(ls)) S.skin=ls;}
+  $('#sSkin').value=S.skin;S.variants.clear();
+  ['#sSkin','#sRoot','#q','#sType','#bCheck'].forEach(s=>$(s).disabled=false);
+  $('#empty').style.display='none';
+  await loadSkin();
+}
+
+/* ---------------- text + xml ---------------- */
+function decode(bytes){
+  let s='';for(let i=0;i<bytes.length;i+=8192) s+=String.fromCharCode.apply(null,bytes.subarray(i,i+8192));
+  let bom=false,enc='latin1';
+  if(bytes[0]===0xEF&&bytes[1]===0xBB&&bytes[2]===0xBF){bom=true;enc='utf8'}
+  else if(/encoding\s*=\s*["']utf-8/i.test(s.slice(0,200))) enc='utf8';
+  let text=s;
+  if(enc==='utf8'){text=new TextDecoder('utf-8').decode(bom?bytes.subarray(3):bytes)}
+  return {text,enc,bom,crlf:/\r\n/.test(text.slice(0,4000))};
+}
+function encode(text,doc){
+  if(doc.enc==='utf8'){const b=new TextEncoder().encode(text);if(!doc.bom) return b;const o=new Uint8Array(b.length+3);o.set([0xEF,0xBB,0xBF]);o.set(b,3);return o}
+  const o=new Uint8Array(text.length);for(let i=0;i<text.length;i++){const c=text.charCodeAt(i);o[i]=c<256?c:63}return o;
+}
+function scan(t){ // spans of children of the root element, in document order
+  let i=0,depth=0,start=-1;const spans=[];let rootClose=-1,rootEnd=-1;const n=t.length;
+  while(i<n){
+    const lt=t.indexOf('<',i);if(lt<0) break;
+    if(t.startsWith('<!--',lt)){const e=t.indexOf('-->',lt+4);i=e<0?n:e+3;continue}
+    if(t.startsWith('<![CDATA[',lt)){const e=t.indexOf(']]>',lt);i=e<0?n:e+3;continue}
+    if(t[lt+1]==='?'||t[lt+1]==='!'){const e=t.indexOf('>',lt);i=e<0?n:e+1;continue}
+    let j=lt+1,q=null;while(j<n){const c=t[j];if(q){if(c===q)q=null}else if(c==='"'||c==="'")q=c;else if(c==='>')break;j++}
+    const close=t[lt+1]==='/',self=t[j-1]==='/';
+    if(close){depth--;if(depth===1) spans.push([start,j+1]);if(depth===0){rootClose=lt;rootEnd=j+1;break}}
+    else if(self){if(depth===1) spans.push([lt,j+1])}
+    else{if(depth===1) start=lt;depth++}
+    i=j+1;
+  }
+  return {spans,rootClose,rootEnd};
+}
+function sanitize(t,rootEnd){
+  if(rootEnd>0) t=t.slice(0,rootEnd);
+  t=t.replace(/^\uFEFF/,'');
+  t=t.replace(/<!--([\s\S]*?)-->/g,(m,c)=>'<!--'+c.replace(/--/g,'- -').replace(/-$/,'- ')+'-->');
+  return t.replace(/&(?!(?:[a-zA-Z]+|#\d+|#x[0-9a-fA-F]+);)/g,'&amp;');
+}
+const XS=new XMLSerializer();
+const ser=el=>XS.serializeToString(el);
+async function loadDoc(name){
+  const hit=fileFor(name);if(!hit) return null;
+  const bytes=new Uint8Array(await hit.file.arrayBuffer());
+  const d=decode(bytes);
+  const sc=scan(d.text);
+  const dom=new DOMParser().parseFromString(sanitize(d.text,sc.rootEnd),'application/xml');
+  const doc={name:hit.file.name,skin:hit.skin,bytes,...d,...sc,dom,added:new Set(),err:null};
+  const pe=dom.getElementsByTagName('parsererror')[0];
+  if(pe){doc.err=pe.textContent.split('\n')[0];return doc}
+  doc.origEls=[...dom.documentElement.children];
+  doc.spanOk=doc.origEls.length===sc.spans.length;
+  return doc;
+}
+
+/* ---------------- schema ---------------- */
+function parseSchema(dom){
+  const T={};
+  for(const et of dom.getElementsByTagName('ElementType')){
+    const sup=et.getElementsByTagName('superType')[0];
+    const fields=[...et.children].filter(c=>c.tagName==='element').map(e=>{
+      const t=e.getAttribute('type')||'string';const [base,r]=t.split(':');const d=e.getElementsByTagName('default')[0];
+      return {name:e.getAttribute('name'),type:base,ref:r==='item',many:e.getAttribute('maxOccurs')==='*',def:d?d.textContent:undefined};
+    });
+    T[et.getAttribute('name')]={name:et.getAttribute('name'),sup:sup?sup.getAttribute('type'):null,fields};
+  }
+  return T;
+}
+const FBK={RelativePosition:'true',Font:'3',TopAnchorToTop:'true',LeftAnchorToLeft:'true',BottomAnchorToTop:'true',RightAnchorToLeft:'true',AutoDraw:'true',Spacing:'5',GaugeOffsetY:'16'};
+const fcache=new Map();
+function fieldsFor(type){
+  if(fcache.has(type)) return fcache.get(type);
+  const chain=[];let t=type,g=0;while(t&&S.schema[t]&&g++<20){chain.unshift(S.schema[t]);t=S.schema[t].sup}
+  const out=[];for(const ty of chain) for(const f of ty.fields) out.push({...f,owner:ty.name});
+  fcache.set(type,out);return out;
+}
+function fdef(type,name){return fieldsFor(type).find(f=>f.name===name)}
+function dflt(type,name){const f=fdef(type,name);return f&&f.def!==undefined?f.def:FBK[name]}
+
+/* ---------------- registry ---------------- */
+function regAdd(el,doc){
+  const name=el.getAttribute('item');if(!name) return;
+  const k=low(name);if(!S.items.has(k)) S.items.set(k,[]);
+  const arr=S.items.get(k);
+  for(let i=arr.length-1;i>=0;i--) if(arr[i].el===el) arr.splice(i,1);
+  arr.push({name,type:el.tagName,el,doc});
+}
+function regRemove(el){for(const [k,arr] of S.items){const i=arr.findIndex(e=>e.el===el);if(i>=0){arr.splice(i,1);if(!arr.length) S.items.delete(k)}}}
+function entryOf(el){const k=low(el.getAttribute('item'));const a=S.items.get(k);const g=a&&a.find(e=>e.el===el);if(g) return g;const o=S.designOverlay&&S.designOverlay.get(k);return o&&o.find(e=>e.el===el)}
+function item(name,want){
+  if(!name) return null;name=String(name).trim();
+  const m=name.match(/^([A-Za-z0-9_]+):(.+)$/);if(m&&S.schema[m[1]]){want=m[1];name=m[2]}
+  const OV=S.overlay||(S.app==='design'?S.designOverlay:null);
+  if(OV){const ov=OV.get(name.toLowerCase());if(ov&&ov.length){const sv=S.overlay;S.overlay=null;const hit=(()=>{if(want==='@piece'){for(let i=ov.length-1;i>=0;i--) if(isPiece(ov[i].type)) return ov[i];return null}if(want){for(let i=ov.length-1;i>=0;i--) if(ov[i].type===want||isA(ov[i].type,want)) return ov[i];return null}return ov[ov.length-1]})();S.overlay=sv;if(hit) return hit}}
+  const arr=S.items.get(name.toLowerCase());if(!arr||!arr.length) return null;
+  if(want==='@piece'){for(let i=arr.length-1;i>=0;i--) if(isPiece(arr[i].type)) return arr[i];return null}
+  if(want){for(let i=arr.length-1;i>=0;i--) if(arr[i].type===want||isA(arr[i].type,want)) return arr[i]}
+  return want?null:arr[arr.length-1];
+}
+function isA(t,base){let g=0;while(t&&g++<20){if(t===base) return true;t=S.schema[t]&&S.schema[t].sup}return false}
+function isPiece(t){return PIECE.has(t)||isA(t,'ScreenPiece')}
+
+/* ---------------- element helpers ---------------- */
+const kids=(el,n)=>{const r=[];if(el) for(const c of el.children) if(c.tagName===n) r.push(c);return r};
+const kid=(el,n)=>{if(el) for(const c of el.children) if(c.tagName===n) return c;return null};
+const getS=(el,n)=>{const c=kid(el,n);return c?c.textContent.trim():null};
+function B(el,n){let v=getS(el,n);if(v==null||v==='') v=dflt(el.tagName,n);return String(v).trim().toLowerCase()==='true'}
+function N(el,n,d=0){let v=getS(el,n);if(v==null||v==='') v=dflt(el.tagName,n);const x=parseInt(v,10);return isNaN(x)?d:x}
+function P(el,n){const c=kid(el,n);return c?{x:N(c,'X'),y:N(c,'Y')}:null}
+function Z(el,n){const c=kid(el,n);return c?{w:N(c,'CX'),h:N(c,'CY')}:null}
+function C(el,n){const c=kid(el,n);if(!c) return null;return {r:N(c,'R'),g:N(c,'G'),b:N(c,'B'),a:getS(c,'Alpha')!=null?N(c,'Alpha'):255}}
+const rootOf=el=>{while(el.parentNode&&el.parentNode!==el.ownerDocument.documentElement) el=el.parentNode;return el};
+function wsBefore(el){const p=el.previousSibling;if(p&&p.nodeType===3){const m=p.data.match(/\n([ \t]*)$/);if(m) return m[1]}return '\t'}
+function childIndent(el){const f=el.firstElementChild;return f?wsBefore(f):wsBefore(el)+'\t'}
+function newKid(el,name,after){
+  const d=el.ownerDocument,ind=childIndent(el),c=d.createElement(name);
+  if(!el.firstElementChild){
+    while(el.firstChild) el.removeChild(el.firstChild);
+    el.appendChild(d.createTextNode('\n'+ind));el.appendChild(c);el.appendChild(d.createTextNode('\n'+wsBefore(el)));
+  }else{
+    const ref=after||el.lastElementChild;const ws=d.createTextNode('\n'+ind);
+    el.insertBefore(ws,ref.nextSibling);el.insertBefore(c,ws.nextSibling);
+  }
+  return c;
+}
+const ensure=(el,name)=>kid(el,name)||newKid(el,name);
+function setPath(el,path,val){let c=el;for(const p of path) c=ensure(c,p);c.textContent=String(val)}
+function dropNode(c){const p=c.previousSibling;if(p&&p.nodeType===3) p.parentNode.removeChild(p);c.parentNode.removeChild(c)}
+function setRGB(el,name,col){const c=ensure(el,name);for(const k of ['R','G','B']) ensure(c,k).textContent=String(col[k.toLowerCase()]);if(col.a!==undefined&&(kid(c,'Alpha')||col.a!==255)) ensure(c,'Alpha').textContent=String(col.a)}
+
+/* ---------------- loading a skin ---------------- */
+async function loadSkin(){
+  S.docs=[];S.items.clear();S.tex.clear();S.texInfo.clear();S.orig.clear();S.undo=[];S.redo=[];S.users=null;S.dl.clear();fcache.clear();
+  S.sel=null;S.tree=null;S.rootEntry=null;S.mode='none';S.history=[];S.problems=[];S.previewCols=new Map();
+  const prog=p=>$('#prog').style.width=(p*100)+'%';
+  msg('Reading SIDL.xml schema…');
+  const sd=await loadDoc('SIDL.xml');
+  if(sd&&!sd.err) S.schema=parseSchema(sd.dom); else {S.schema={};S.problems.push({t:'SIDL.xml missing or unreadable: property defaults will be guessed.'})}
+  const rd=await loadDoc(S.rootFile);
+  if(!rd){msg(S.rootFile+' not found in this skin or default.');prog(0);return}
+  if(rd.err){msg(S.rootFile+' could not be parsed: '+rd.err);return}
+  const inc=[...rd.dom.getElementsByTagName('Include')].map(e=>e.textContent.trim()).filter(Boolean);
+  let n=0;
+  for(const name of inc){
+    prog(++n/inc.length);
+    if(low(name)==='sidl.xml') continue;
+    if(n%8===0){msg(`Loading ${n}/${inc.length}: ${name}`);await new Promise(r=>setTimeout(r))}
+    const d=await loadDoc(name);
+    if(!d){S.problems.push({t:`Included file not found: ${name}`});continue}
+    if(d.err){S.problems.push({t:`${d.name} (${d.skin}) could not be parsed: ${d.err}`});continue}
+    if(!d.spanOk) S.problems.push({t:`${d.name}: unusual structure, saving will rewrite the whole file instead of only the changed blocks.`});
+    S.docs.push(d);
+    for(const el of d.origEls) regAdd(el,d);
+  }
+  S.docs.push(rd);
+  prog(1);setTimeout(()=>prog(0),400);
+  S.topNames=new Set();
+  for(const arr of S.items.values()) for(const e of arr) if(e.type==='TopLevelWindowList') for(const s of kids(e.el,'Screens')) S.topNames.add(low(getS(s,'ScreenName')));
+  const fromSkin=S.docs.filter(d=>d.skin===S.skin&&S.skin!=='default').length;
+  msg(`Loaded ${S.docs.length} files${S.skin!=='default'?` (${fromSkin} from ${S.skin}, the rest from default)`:''}, ${countItems()} items.`);
+  refreshList();updateButtons();
+  const first=item('PlayerWindow','Screen')||[...S.items.values()].flat().find(e=>e.type==='Screen');
+  if(first) openEntry(first,{noHist:true});
+  S.variants.clear();if(typeof rCache!=='undefined') rCache.clear();if(S.app==='layout'){renderLList();renderLProps()}
+  draw();
+}
+const countItems=()=>{let c=0;for(const a of S.items.values()) c+=a.length;return c};
+function computeUsers(){
+  const U=new Map();
+  for(const arr of S.items.values()) for(const e of arr){
+    for(const tag of ['Pieces','Pages']) for(const p of kids(e.el,tag)){const k=low(p.textContent.replace(/^[A-Za-z0-9_]+:/,''));if(!U.has(k)) U.set(k,[]);U.get(k).push(e)}
+  }
+  S.users=U;
+}
+const usersOf=name=>{if(!S.users) computeUsers();return S.users.get(low(name))||[]};
+
+/* ---------------- textures ---------------- */
+function decodeTGA(b){
+  const idl=b[0],cmt=b[1],it=b[2],w=b[12]|b[13]<<8,h=b[14]|b[15]<<8,bpp=b[16],desc=b[17];
+  if(cmt||![2,3,10,11].includes(it)) return null;
+  const px=bpp>>3,gray=it===3||it===11,rle=it>=9,out=new Uint8ClampedArray(w*h*4),total=w*h;
+  const abits=desc&15;let p=18+idl,i=0;
+  const put=(k,o)=>{const q=k*4;
+    if(gray){out[q]=out[q+1]=out[q+2]=b[o];out[q+3]=px===2?b[o+1]:255}
+    else if(px===2){const v=b[o]|b[o+1]<<8;out[q]=(v>>10&31)*8.23;out[q+1]=(v>>5&31)*8.23;out[q+2]=(v&31)*8.23;out[q+3]=abits?(v&0x8000?255:0):255}
+    else{out[q]=b[o+2];out[q+1]=b[o+1];out[q+2]=b[o];out[q+3]=px===4&&abits?b[o+3]:255}};
+  if(!rle){for(;i<total&&p+px<=b.length;i++,p+=px) put(i,p)}
+  else while(i<total&&p<b.length){const c=b[p++],cnt=(c&127)+1;
+    if(c&128){for(let k=0;k<cnt&&i<total;k++) put(i++,p);p+=px}else{for(let k=0;k<cnt&&i<total;k++,p+=px) put(i++,p)}}
+  if(!(desc&32)){const row=w*4,tmp=new Uint8ClampedArray(row);for(let y=0;y<h>>1;y++){const a=y*row,z=(h-1-y)*row;tmp.set(out.subarray(a,a+row));out.copyWithin(a,z,z+row);out.set(tmp,z)}}
+  if(desc&16){for(let y=0;y<h;y++) for(let x=0;x<w>>1;x++){for(let k=0;k<4;k++){const a=(y*w+x)*4+k,z=(y*w+w-1-x)*4+k;const t=out[a];out[a]=out[z];out[z]=t}}}
+  return {w,h,data:out};
+}
+function decodeDDS(b){
+  const dv=new DataView(b.buffer,b.byteOffset,b.byteLength);
+  if(dv.getUint32(0,true)!==0x20534444) return null;
+  const h=dv.getUint32(12,true),w=dv.getUint32(16,true),pf=dv.getUint32(80,true);
+  let four=String.fromCharCode(b[84],b[85],b[86],b[87]),off=128;
+  if(four==='DX10'){const f=dv.getUint32(128,true);off=148;four=f===71||f===72?'DXT1':f===74||f===75?'DXT3':f===77||f===78?'DXT5':f===87?'BGRA':f===28?'RGBA':'?'}
+  const out=new Uint8ClampedArray(w*h*4);
+  if(four==='DXT1'||four==='DXT3'||four==='DXT5'){
+    const bs=four==='DXT1'?8:16,bw=Math.max(1,(w+3)>>2),bh=Math.max(1,(h+3)>>2);
+    const c565=v=>[(v>>11&31)*255/31,(v>>5&63)*255/63,(v&31)*255/31];
+    for(let by=0;by<bh;by++) for(let bx=0;bx<bw;bx++){
+      let o=off+(by*bw+bx)*bs;if(o+bs>b.length) continue;const A=new Array(16).fill(255);
+      if(four==='DXT3'){for(let i=0;i<16;i++) A[i]=((b[o+(i>>1)]>>((i&1)*4))&15)*17;o+=8}
+      else if(four==='DXT5'){const a0=b[o],a1=b[o+1],t=[a0,a1];
+        if(a0>a1) for(let k=1;k<7;k++) t.push(((7-k)*a0+k*a1)/7|0); else{for(let k=1;k<5;k++) t.push(((5-k)*a0+k*a1)/5|0);t.push(0,255)}
+        const lo=b[o+2]|b[o+3]<<8|b[o+4]<<16,hi=b[o+5]|b[o+6]<<8|b[o+7]<<16;
+        for(let i=0;i<16;i++) A[i]=t[i<8?(lo>>(3*i))&7:(hi>>(3*(i-8)))&7];o+=8}
+      const v0=b[o]|b[o+1]<<8,v1=b[o+2]|b[o+3]<<8,c0=c565(v0),c1=c565(v1),pal=[c0,c1];
+      if(four!=='DXT1'||v0>v1){pal.push(c0.map((x,k)=>(2*x+c1[k])/3),c0.map((x,k)=>(x+2*c1[k])/3))}else{pal.push(c0.map((x,k)=>(x+c1[k])/2),[0,0,0,-1])}
+      const bits=b[o+4]|b[o+5]<<8|b[o+6]<<16|b[o+7]<<24;
+      for(let i=0;i<16;i++){const x=bx*4+(i&3),y=by*4+(i>>2);if(x>=w||y>=h) continue;const c=pal[(bits>>>(2*i))&3],q=(y*w+x)*4;
+        out[q]=c[0];out[q+1]=c[1];out[q+2]=c[2];out[q+3]=c[3]===-1?0:A[i]}
+    }
+    return {w,h,data:out};
+  }
+  const bc=dv.getUint32(88,true),mR=dv.getUint32(92,true),mG=dv.getUint32(96,true),mB=dv.getUint32(100,true),mA=pf&1?dv.getUint32(104,true):0;
+  if(four==='BGRA'||four==='RGBA'){const bgra=four==='BGRA';for(let i=0;i<w*h;i++){const o=off+i*4,q=i*4;out[q]=b[o+(bgra?2:0)];out[q+1]=b[o+1];out[q+2]=b[o+(bgra?0:2)];out[q+3]=b[o+3]}return {w,h,data:out}}
+  if(!(pf&0x40)||!bc) return null;
+  const by=bc>>3,ch=m=>{if(!m) return null;let s=0;while(!((m>>>s)&1)) s++;let l=0;while((m>>>(s+l))&1) l++;return {s,mx:(1<<l)-1}};
+  const R=ch(mR),G=ch(mG),Bl=ch(mB),Al=ch(mA);
+  for(let i=0;i<w*h;i++){const o=off+i*by;let v=0;for(let k=0;k<by;k++) v|=b[o+k]<<(8*k);v>>>=0;const q=i*4;
+    out[q]=R?((v>>>R.s)&R.mx)*255/R.mx:0;out[q+1]=G?((v>>>G.s)&G.mx)*255/G.mx:0;out[q+2]=Bl?((v>>>Bl.s)&Bl.mx)*255/Bl.mx:0;out[q+3]=Al?((v>>>Al.s)&Al.mx)*255/Al.mx:255}
+  return {w,h,data:out};
+}
+function texFile(name){
+  let h=fileFor(name);if(h) return h;
+  const base=String(name).replace(/\.[^.]+$/,'');
+  for(const ext of ['.tga','.dds','.png','.jpg','.bmp']){h=fileFor(base+ext);if(h) return h}
+  return null;
+}
+function getTex(name){
+  const k=low(name);if(!k) return null;
+  const c=S.tex.get(k);if(c){if(!c.img&&!c.missing) S.texPending=true;return c.img||null}
+  const rec={img:null,missing:false};S.tex.set(k,rec);S.texPending=true;
+  const h=texFile(name);if(!h){rec.missing=true;return null}
+  (async()=>{
+    try{
+      const bytes=new Uint8Array(await h.file.arrayBuffer());let dec=null;
+      if(/\.tga$/i.test(h.file.name)) dec=decodeTGA(bytes); else if(/\.dds$/i.test(h.file.name)) dec=decodeDDS(bytes);
+      let cv;
+      if(dec){cv=document.createElement('canvas');cv.width=dec.w;cv.height=dec.h;cv.getContext('2d').putImageData(new ImageData(dec.data,dec.w,dec.h),0,0)}
+      else{const bm=await createImageBitmap(new Blob([bytes]));cv=document.createElement('canvas');cv.width=bm.width;cv.height=bm.height;cv.getContext('2d').drawImage(bm,0,0)}
+      rec.img=cv;rec.skin=h.skin;
+    }catch(e){rec.missing=true;rec.err=String(e)}
+    schedule();
+  })();
+  return null;
+}
+function texScale(name,img){ // TextureInfo size is the coordinate space frames are written in
+  const ti=item(name,'TextureInfo');const s=ti&&Z(ti.el,'Size');
+  if(!s||!s.w||!s.h||!img) return {sx:1,sy:1,w:img?img.width:0,h:img?img.height:0};
+  return {sx:img.width/s.w,sy:img.height/s.h,w:s.w,h:s.h};
+}
+const tintCache=new Map();
+function tinted(img,sx,sy,sw,sh,col){
+  const key=[img.__id||(img.__id=Math.random()),sx,sy,sw,sh,col.r,col.g,col.b].join();
+  let c=tintCache.get(key);if(c) return c;
+  c=document.createElement('canvas');c.width=Math.max(1,Math.round(sw));c.height=Math.max(1,Math.round(sh));const x=c.getContext('2d');
+  x.drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);x.globalCompositeOperation='multiply';x.fillStyle=`rgb(${col.r},${col.g},${col.b})`;x.fillRect(0,0,c.width,c.height);
+  x.globalCompositeOperation='destination-in';x.drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);
+  if(tintCache.size>400) tintCache.clear();tintCache.set(key,c);return c;
+}
+
+/* ---------------- animation helpers ---------------- */
+function frameOf(animName,idx=0){
+  const a=item(animName,'Ui2DAnimation');if(!a) return null;
+  const fr=kids(a.el,'Frames');const f=fr[Math.min(idx,fr.length-1)];if(!f) return null;
+  const loc=P(f,'Location')||{x:0,y:0},sz=Z(f,'Size')||{w:0,h:0};
+  const r={tex:getS(f,'Texture'),x:loc.x,y:loc.y,w:sz.w,h:sz.h,anim:a};
+  if(B(a.el,'Grid')){const cw=N(a.el,'CellWidth'),ch=N(a.el,'CellHeight');if(cw&&ch){r.w=cw;r.h=ch}}
+  return r;
+}
+function nat(animName){const f=frameOf(animName);return f?{w:f.w,h:f.h}:{w:0,h:0}}
+function drawAnim(ctx,animName,x,y,w,h,tint){
+  const f=frameOf(animName);if(!f||!f.tex) return false;
+  const img=getTex(f.tex);if(!img) return false;
+  if(w==null){w=f.w;h=f.h}if(w<=0||h<=0||f.w<=0||f.h<=0) return true;
+  const s=texScale(f.tex,img),sx=f.x*s.sx,sy=f.y*s.sy,sw=f.w*s.sx,sh=f.h*s.sy;
+  if(tint&&!(tint.r===255&&tint.g===255&&tint.b===255)) ctx.drawImage(tinted(img,sx,sy,sw,sh,tint),x,y,w,h);
+  else ctx.drawImage(img,sx,sy,sw,sh,x,y,w,h);
+  return true;
+}
+function drawTiled(ctx,texName,r,tint,stretch){
+  const img=getTex(texName);if(!img||r.w<=0||r.h<=0) return false;
+  const s=texScale(texName,img);const src=tint?tinted(img,0,0,img.width,img.height,tint):img;
+  if(stretch){ctx.drawImage(src,r.x,r.y,r.w,r.h);return true}
+  ctx.save();ctx.beginPath();ctx.rect(r.x,r.y,r.w,r.h);ctx.clip();
+  for(let y=r.y;y<r.y+r.h;y+=s.h) for(let x=r.x;x<r.x+r.w;x+=s.w) ctx.drawImage(src,x,y,s.w,s.h);
+  ctx.restore();return true;
+}
+function tpl(el,field,type){ // inline template element, or a referenced item's element
+  const c=kid(el,field);if(!c) return null;
+  if(c.firstElementChild) return c;
+  const e=item(c.textContent,type);return e?e.el:null;
+}
+function frameDims(ft){if(!ft) return {l:0,r:0,t:0,b:0};
+  const g=n=>nat(getS(ft,n));const L=g('Left').w||g('LeftTop').w||g('TopLeft').w,R=g('Right').w||g('RightTop').w||g('TopRight').w;
+  const T=g('Top').h||g('TopLeft').h,Bm=g('Bottom').h||g('BottomLeft').h;return {l:L,r:R,t:T,b:Bm}}
+function drawFrame(ctx,ft,r,tint){
+  if(!ft) return;const a=n=>getS(ft,n),sz=n=>nat(a(n));
+  const tl=sz('TopLeft'),tr=sz('TopRight'),bl=sz('BottomLeft'),br=sz('BottomRight');
+  const T=sz('Top').h,Bm=sz('Bottom').h,L=Math.max(sz('Left').w,sz('LeftTop').w),R=Math.max(sz('Right').w,sz('RightTop').w);
+  if(a('Middle')) drawAnim(ctx,a('Middle'),r.x+L,r.y+T,r.w-L-R,r.h-T-Bm,tint);
+  if(a('Top')) drawAnim(ctx,a('Top'),r.x+tl.w,r.y,r.w-tl.w-tr.w,T||sz('Top').h,tint);
+  if(a('Bottom')) drawAnim(ctx,a('Bottom'),r.x+bl.w,r.y+r.h-Bm,r.w-bl.w-br.w,Bm,tint);
+  const side=(top,mid,bot,x,wid,c1,c2)=>{
+    const t=sz(top),bt=sz(bot);const y0=r.y+c1.h,y1=r.y+r.h-c2.h;
+    if(a(top)&&a(top)!==a(mid)) drawAnim(ctx,a(top),x,y0,wid,t.h,tint);
+    if(a(bot)&&a(bot)!==a(mid)) drawAnim(ctx,a(bot),x,y1-bt.h,wid,bt.h,tint);
+    const ty=a(top)&&a(top)!==a(mid)?t.h:0,by=a(bot)&&a(bot)!==a(mid)?bt.h:0;
+    if(a(mid)) drawAnim(ctx,a(mid),x,y0+ty,wid,y1-y0-ty-by,tint);
+  };
+  side('LeftTop','Left','LeftBottom',r.x,L||sz('Left').w,tl,bl);
+  side('RightTop','Right','RightBottom',r.x+r.w-(R||sz('Right').w),R||sz('Right').w,tr,br);
+  if(a('TopLeft')) drawAnim(ctx,a('TopLeft'),r.x,r.y,tl.w,tl.h,tint);
+  if(a('TopRight')) drawAnim(ctx,a('TopRight'),r.x+r.w-tr.w,r.y,tr.w,tr.h,tint);
+  if(a('BottomLeft')) drawAnim(ctx,a('BottomLeft'),r.x,r.y+r.h-bl.h,bl.w,bl.h,tint);
+  if(a('BottomRight')) drawAnim(ctx,a('BottomRight'),r.x+r.w-br.w,r.y+r.h-br.h,br.w,br.h,tint);
+}
+function wdtOf(el,type){
+  let n=getS(el,'DrawTemplate');
+  if(!n&&type==='Screen'){for(const arr of S.items.values()) for(const e of arr) if(e.type==='SuiteDefaults'){n=getS(e.el,'DefaultWindowDrawTemplate');break}}
+  const e=n&&item(n,'WindowDrawTemplate');return e?e.el:null;
+}
+
+/* ---------------- layout ---------------- */
+function rectOf(el,pc){
+  const loc=P(el,'Location')||{x:0,y:0},s=Z(el,'Size')||{w:0,h:0};
+  let x=pc.x+loc.x,y=pc.y+loc.y,w=s.w,h=s.h;
+  const as=B(el,'AutoStretch'),ah=as||B(el,'AutoStretchHorizontal'),av=as||B(el,'AutoStretchVertical');
+  if(ah){const L=N(el,'LeftAnchorOffset'),R=N(el,'RightAnchorOffset');const l=B(el,'LeftAnchorToLeft')?pc.x+L:pc.x+pc.w-L,rr=B(el,'RightAnchorToLeft')?pc.x+R:pc.x+pc.w-R;x=l;w=rr-l}
+  if(av){const T=N(el,'TopAnchorOffset'),Bo=N(el,'BottomAnchorOffset');const t=B(el,'TopAnchorToTop')?pc.y+T:pc.y+pc.h-T,b=B(el,'BottomAnchorToTop')?pc.y+Bo:pc.y+pc.h-Bo;y=t;h=b-t}
+  return {x,y,w,h,ah,av};
+}
+function build(entry,pc,depth,parent,override){
+  const el=entry.el,type=entry.type;
+  const r=override||rectOf(el,pc);
+  const n={entry,el,type,r,pc,kids:[],parent,depth,missing:[],hidden:getS(el,'AutoDraw')==='false'||(parent&&parent.hidden)};
+  const wdt=isA(type,'Control')?wdtOf(el,type):null;n.wdt=wdt;
+  let c={x:r.x,y:r.y,w:r.w,h:r.h};
+  if(type==='Screen'&&B(el,'Style_Titlebar')&&wdt){const tb=kid(wdt,'Titlebar');let th=0;
+    if(tb) for(const k of ['Middle','Top','TopLeft','Left']){const z=nat(getS(tb,k)).h;if(z){th=Math.max(th,z)}}
+    th=th||18;n.title={x:r.x,y:r.y,w:r.w,h:th};c.y+=th;c.h-=th}
+  n.frameRect={...c};
+  if(B(el,'Style_Border')&&wdt){const d=frameDims(kid(wdt,'Border'));c={x:c.x+d.l,y:c.y+d.t,w:c.w-d.l-d.r,h:c.h-d.t-d.b}}
+  n.client=c;
+  S.nodes.push(n);if(!S.nodeByEl.has(el)) S.nodeByEl.set(el,n);
+  if(depth>14) return n;
+  if(type==='TabBox'){
+    const pages=kids(el,'Pages').map(p=>p.textContent.trim());n.pages=pages;
+    const th=B(el,'ShowTabs')?22:0;n.tabH=th;
+    const ai=Math.min(S.pages.get(el)||0,Math.max(0,pages.length-1));n.active=ai;
+    const pr={x:c.x,y:c.y+th,w:c.w,h:c.h-th};
+    pages.forEach((p,i)=>{const e=item(p,'Page');if(!e){n.missing.push(p);return}
+      if(i===ai) n.kids.push(build(e,pr,depth+1,n,pr))});
+    return n;
+  }
+  for(const p of kids(el,'Pieces')){
+    const nm=p.textContent.trim();if(!nm) continue;
+    const e=item(nm,'@piece');if(!e){n.missing.push(nm);continue}
+    if(e.el===el) continue;
+    n.kids.push(build(e,c,depth+1,n));
+  }
+  if(/LayoutBox$|^FinderBox$/.test(type)&&type!=='LayoutBox') layoutBox(n); // a plain LayoutBox keeps each piece at its own Location
+  return n;
+}
+function shift(n,dx,dy){n.r={...n.r,x:n.r.x+dx,y:n.r.y+dy};n.client={...n.client,x:n.client.x+dx,y:n.client.y+dy};if(n.title) n.title={...n.title,x:n.title.x+dx,y:n.title.y+dy};n.frameRect={...n.frameRect,x:n.frameRect.x+dx,y:n.frameRect.y+dy};for(const k of n.kids) shift(k,dx,dy)}
+function layoutBox(n){
+  const el=n.el,t=n.type,c=n.client,sp=N(el,'Spacing',5),pl=N(el,'PaddingLeft'),pt=N(el,'PaddingTop'),pr=N(el,'PaddingRight');
+  let x=c.x+pl,y=c.y+pt,row=0;const hf=t!=='TileLayoutBox'||B(el,'HorizontalFirst'),ss=N(el,'SecondarySpacing',5);
+  for(const k of n.kids){
+    k.laid=true;
+    if(t==='HorizontalLayoutBox'){shift(k,x-k.r.x,y-k.r.y);x+=k.r.w+sp}
+    else if(t==='TileLayoutBox'){
+      if(hf){if(x+k.r.w>c.x+c.w-pr&&x>c.x+pl){x=c.x+pl;y+=row+ss;row=0}shift(k,x-k.r.x,y-k.r.y);x+=k.r.w+sp;row=Math.max(row,k.r.h)}
+      else{if(y+k.r.h>c.y+c.h&&y>c.y+pt){y=c.y+pt;x+=row+ss;row=0}shift(k,x-k.r.x,y-k.r.y);y+=k.r.h+sp;row=Math.max(row,k.r.w)}
+    }
+    else{shift(k,x-k.r.x,y-k.r.y);y+=k.r.h+sp}
+  }
+}
+function rebuild(){
+  S.nodes=[];S.nodeByEl=new Map();S.tree=null;
+  if(S.mode!=='screen'||!S.rootEntry) return;
+  const el=S.rootEntry.el;let s=Z(el,'Size')||{w:0,h:0};
+  if(!s.w||!s.h) s={w:s.w||320,h:s.h||220};
+  let lw=typeof layoutWinFor==='function'?layoutWinFor(el):null;
+  const ts=typeof tileSnap==='function'?tileSnap({entry:S.rootEntry,overlay:S.designOverlay||null}):null;
+  if(ts){const so=lw?lw.so:{noSpin:false,pct:100},pc=S.previewCols&&S.previewCols.get(el);
+    const q=pc?snapTo(ts,0,0,'w',{...so,cols:pc}):lw?snapTo(ts,lw.sw||lw.w,lw.sh||lw.h,'w',so):snapTo(ts,s.w,s.h,'w',so);
+    lw={...(lw||{}),w:q.w,h:q.h,ts,so,fromLayout:!!lw}}
+  S.designLW=lw;
+  if(lw) s={w:lw.w,h:lw.h};
+  const R={x:0,y:0,w:s.w,h:s.h};
+  S.tree=build(S.rootEntry,R,0,null,R);
+  if(lw&&lw.ts){const k=S.nodes.length;arrangeGrid(S.tree,lw);S.nodes=[];S.nodeByEl=new Map();const walk=n=>{S.nodes.push(n);if(!S.nodeByEl.has(n.el)) S.nodeByEl.set(n.el,n);for(const c of n.kids) walk(c)};walk(S.tree);void k}
+}
+
+/* ---------------- drawing ---------------- */
+const cv=$('#cv');let ctx=cv.getContext('2d'); // swapped to an offscreen context to measure windows
+let raf=0;const schedule=()=>{if(!raf) raf=requestAnimationFrame(()=>{raf=0;draw()})};
+function resize(){const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.max(1,r.width*d|0);cv.height=Math.max(1,r.height*d|0);draw()}
+const ro=new ResizeObserver(resize);ro.observe(cv);
+function textOf(el,type){
+  const t=getS(el,'Text');if(t) return t;
+  const q=getS(el,'EQType');if(q&&q!=='-1'&&(type==='Label'||type==='Gauge')) return '#'+q;
+  return '';
+}
+function drawText(t,r,o){
+  if(!t) return;const px=FONT[o.font]??12;ctx.font=`${px}px Arial, Helvetica, sans-serif`;ctx.textBaseline='top';
+  const col=o.color||{r:255,g:255,b:255};
+  const words=String(t).replace(/<br\s*\/?>/gi,'\n').split('\n');let lines=[];
+  for(const para of words){if(o.nowrap||r.w<=0){lines.push(para);continue}let cur='';for(const w of para.split(' ')){const tryL=cur?cur+' '+w:w;if(ctx.measureText(tryL).width>r.w&&cur){lines.push(cur);cur=w}else cur=tryL}lines.push(cur)}
+  const lh=px+2,tot=lines.length*lh;let y=r.y;
+  if(o.vcenter) y=r.y+(r.h-tot)/2;else if(o.vbottom) y=r.y+r.h-tot;
+  ctx.save();ctx.beginPath();ctx.rect(r.x-1,r.y-1,r.w+2,r.h+2);ctx.clip();
+  for(const L of lines){const w=ctx.measureText(L).width;let x=r.x;if(o.center) x=r.x+(r.w-w)/2;else if(o.right) x=r.x+r.w-w;
+    if(o.shadow){ctx.fillStyle='#000';ctx.fillText(L,x+1,y+1)}ctx.fillStyle=o.dim?'rgba(200,200,200,.55)':`rgb(${col.r},${col.g},${col.b})`;ctx.fillText(L,x,y);y+=lh}
+  ctx.restore();
+}
+function drawWindow(n){
+  const el=n.el,w=n.wdt;if(!w) return;
+  const fr=n.frameRect,bg=getS(w,'Background'),tint=C(el,'BackgroundTextureTint');
+  if(bg&&!B(el,'Style_Transparent')) drawTiled( // transparent windows (map, player, target in LasherUI) show no background in game
+    ctx,bg,n.client,tint,N(w,'BackgroundDrawType')===1); // inside the border only, like the game
+  if(B(el,'Style_Border')) drawFrame(ctx,kid(w,'Border'),fr);
+  if(n.title){drawFrame(ctx,kid(w,'Titlebar'),n.title);
+    const t=getS(el,'Text');drawText(t,{x:n.title.x+8,y:n.title.y,w:n.title.w-40,h:n.title.h},{font:N(el,'Font',3),color:C(el,'TextColor'),vcenter:true,nowrap:true});
+    let bx=n.title.x+n.title.w-4;
+    for(const [flag,box] of [['Style_Closebox','CloseBox'],['Style_Minimizebox','MinimizeBox'],['Style_Qmarkbox','QMarkBox']]){
+      if(!B(el,flag)) continue;const bt=kid(w,box);const an=bt&&getS(bt,'Normal');const z=nat(an);if(!z.w) continue;
+      bx-=z.w;drawAnim(ctx,an,bx,n.title.y+(n.title.h-z.h)/2,z.w,z.h);bx-=2}
+  }
+}
+function buttonAnim(el){const bt=tpl(el,'ButtonDrawTemplate','ButtonDrawTemplate')||tpl(el,'Template','ButtonDrawTemplate');return bt?getS(bt,'Normal'):null}
+function drawNode(n){
+  const {el,type,r}=n;if(n.offOrient) return;if(n.hidden&&!S.hidden) return;
+  ctx.save();if(n.hidden) ctx.globalAlpha=.45;
+  const font=N(el,'Font',3),shadow=B(el,'FontShadow'),tc=C(el,'TextColor');
+  if(isA(type,'Control')) drawWindow(n);
+  switch(type){
+    case 'StaticAnimation': if(B(el,'AutoDraw')||S.hidden) drawAnim(ctx,getS(el,'Animation'),r.x,r.y,r.w||null,r.h||null,C(el,'BackgroundTextureTint'));break;
+    case 'StaticTintedBlendAnimation': drawAnim(ctx,getS(el,'Texture1'),r.x,r.y,r.w,r.h,C(el,'Tint1'));break;
+    case 'StaticFrame': case 'StaticHeader': drawFrame(ctx,tpl(el,'FrameTemplate','FrameTemplate'),r);if(type==='StaticHeader') drawText(getS(el,'Text'),r,{font,color:tc,center:true,vcenter:true,shadow});break;
+    case 'StaticText': drawText(getS(el,'Text'),r,{font,color:tc,center:B(el,'AlignCenter'),right:B(el,'AlignRight'),nowrap:B(el,'NoWrap'),shadow});break;
+    case 'Label':{const t=textOf(el,type);drawText(t,r,{font,color:tc,center:B(el,'AlignCenter'),right:B(el,'AlignRight'),vcenter:B(el,'AlignVCenter'),vbottom:B(el,'AlignVBottom'),nowrap:B(el,'NoWrap'),shadow,dim:t.startsWith('#')&&!getS(el,'Text')});break}
+    case 'Button': case 'HotButton':{const a=buttonAnim(el);if(a) drawAnim(ctx,a,r.x,r.y,r.w,r.h);
+      drawText(getS(el,'Text'),{x:r.x+N(el,'TextOffsetX'),y:r.y+N(el,'TextOffsetY'),w:r.w,h:r.h},{font,color:tc,center:B(el,'TextAlignCenter'),right:B(el,'TextAlignRight'),vcenter:B(el,'TextAlignVCenter'),nowrap:B(el,'NoWrap'),shadow});break}
+    case 'Gauge':{const g=kid(el,'GaugeDrawTemplate');const bgA=g&&getS(g,'Background');const gh=nat(bgA).h||nat(g&&getS(g,'Fill')).h||8;const gy=r.y+N(el,'GaugeOffsetY',16);
+      if(g){drawAnim(ctx,bgA,r.x,gy,r.w,gh);drawAnim(ctx,getS(g,'Fill'),r.x,gy,r.w*.72,gh,C(el,'FillTint'));if(getS(g,'Lines')) drawAnim(ctx,getS(g,'Lines'),r.x,gy,r.w,gh);
+        const L=nat(getS(g,'EndCapLeft')),R=nat(getS(g,'EndCapRight'));if(L.w) drawAnim(ctx,getS(g,'EndCapLeft'),r.x,gy,L.w,gh);if(R.w) drawAnim(ctx,getS(g,'EndCapRight'),r.x+r.w-R.w,gy,R.w,gh)}
+      const t=textOf(el,type);drawText(t,{x:r.x+N(el,'TextOffsetX'),y:r.y+N(el,'TextOffsetY'),w:r.w,h:Math.max(14,r.h)},{font,color:tc,nowrap:true,shadow,dim:t.startsWith('#')});break}
+    case 'InvSlot': drawAnim(ctx,getS(el,'Background'),r.x,r.y,r.w,r.h);break;
+    case 'SpellGem':{const g=kid(el,'SpellGemDrawTemplate');if(g){drawAnim(ctx,getS(g,'Background'),r.x,r.y,r.w,r.h);drawAnim(ctx,getS(g,'Holder'),r.x,r.y,r.w,r.h)}break}
+    case 'Slider':{const sa=tpl(el,'SliderArt','SliderDrawTemplate');if(sa){const bg=getS(sa,'Background');const h=nat(bg).h||r.h;drawAnim(ctx,bg,r.x,r.y+(r.h-h)/2,r.w,h);const th=kid(sa,'Thumb');const ta=th&&getS(th,'Normal');const z=nat(ta);if(z.w) drawAnim(ctx,ta,r.x+r.w*.4,r.y+(r.h-z.h)/2,z.w,z.h)}break}
+    case 'Listbox': case 'TreeView':{if(B(el,'ShowHeader')){let x=n.client.x;ctx.fillStyle='rgba(0,0,0,.35)';ctx.fillRect(n.client.x,n.client.y,n.client.w,16);
+      for(const col of kids(el,'Columns')){const w=N(col,'Width',60);drawText(getS(col,'Heading')||'',{x:x+3,y:n.client.y+2,w:w-4,h:14},{font:2,color:{r:220,g:220,b:200},nowrap:true});x+=w;if(x>n.client.x+n.client.w) break}}break}
+    case 'Editbox': case 'Combobox': case 'STMLbox': drawText(getS(el,'Text'),{x:n.client.x+3,y:n.client.y+2,w:n.client.w-6,h:n.client.h-4},{font,color:tc,shadow});break;
+    case 'TabBox':{if(n.tabH){let x=n.client.x;ctx.font='12px Arial';(n.pages||[]).forEach((p,i)=>{const pe=item(p,'Page');const t=(pe&&getS(pe.el,'TabText'))||p;const w=N(el,'TabWidth')||Math.ceil(ctx.measureText(t).width)+18;
+      ctx.fillStyle=i===n.active?'rgba(214,168,73,.35)':'rgba(0,0,0,.45)';ctx.fillRect(x,n.client.y,w-2,n.tabH-2);ctx.strokeStyle='rgba(255,255,255,.25)';ctx.strokeRect(x+.5,n.client.y+.5,w-3,n.tabH-3);
+      drawText(t,{x,y:n.client.y,w:w-2,h:n.tabH-2},{font:3,center:true,vcenter:true,nowrap:true});(n.tabs||(n.tabs=[])).push({i,x,w,y:n.client.y,h:n.tabH});x+=w})}break}
+  }
+  ctx.restore();
+  if(n.kids.length){ctx.save();const c=n.type==='Screen'?n.client:n.r;if(c.w>0&&c.h>0&&n.depth>0){ctx.beginPath();ctx.rect(c.x,c.y,c.w,c.h);ctx.clip()}for(const k of n.kids) drawNode(k);ctx.restore()}
+}
+function draw(){
+  const d=devicePixelRatio||1,W=cv.width,H=cv.height;
+  ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#0f1115';ctx.fillRect(0,0,W,H);
+  const {z,px,py}=S.view;ctx.setTransform(d*z,0,0,d*z,d*px,d*py);ctx.imageSmoothingEnabled=S.smooth||z<1;
+  if(S.app==='layout'){ctx.imageSmoothingEnabled=true;drawLayout();$('#zoom').textContent=Math.round(z*100)+'%';return}
+  if(S.mode==='screen'&&S.tree){
+    const R=S.tree.r;
+    ctx.fillStyle='#191c22';ctx.fillRect(R.x,R.y,R.w,R.h);
+    if(S.grid>0&&z*S.grid>=6){ctx.strokeStyle='rgba(255,255,255,.045)';ctx.lineWidth=1/z;ctx.beginPath();for(let x=0;x<=R.w;x+=S.grid){ctx.moveTo(x,0);ctx.lineTo(x,R.h)}for(let y=0;y<=R.h;y+=S.grid){ctx.moveTo(0,y);ctx.lineTo(R.w,y)}ctx.stroke()}
+    for(const n of S.nodes) n.tabs=null;
+    drawNode(S.tree);
+    ctx.lineWidth=1/z;
+    if(S.outlines) for(const n of S.nodes){if(n.offOrient||(n.hidden&&!S.hidden)) continue;ctx.strokeStyle=n.missing.length?'rgba(229,103,91,.7)':n.laid?'rgba(76,195,181,.35)':'rgba(255,255,255,.16)';ctx.strokeRect(n.r.x+.5/z,n.r.y+.5/z,n.r.w-1/z,n.r.h-1/z)}
+    const hv=S.hover&&S.nodeByEl.get(S.hover);if(hv&&hv!==selNode()){ctx.strokeStyle='rgba(76,195,181,.9)';ctx.strokeRect(hv.r.x,hv.r.y,hv.r.w,hv.r.h)}
+    const sn=selNode();if(sn) drawSel(sn);
+  }else if(S.mode==='texture') drawTexMode();
+  else if(S.mode==='preview') drawPreview();
+  $('#zoom').textContent=Math.round(z*100)+'%';
+}
+function selNode(){return S.sel&&S.mode==='screen'?S.nodeByEl.get(S.sel.el):null}
+function drawSel(n){
+  const z=S.view.z,r=n.r;
+  if(n.parent){const pc=n.pc;ctx.setLineDash([4/z,3/z]);ctx.strokeStyle='rgba(76,195,181,.55)';ctx.strokeRect(pc.x,pc.y,pc.w,pc.h);ctx.setLineDash([]);
+    if(r.ah||r.av){ctx.strokeStyle='#4cc3b5';ctx.lineWidth=1.5/z;ctx.beginPath();const cx=r.x+r.w/2,cy=r.y+r.h/2,el=n.el;
+      if(r.ah){const lx=B(el,'LeftAnchorToLeft')?pc.x:pc.x+pc.w,rx=B(el,'RightAnchorToLeft')?pc.x:pc.x+pc.w;ctx.moveTo(lx,cy);ctx.lineTo(r.x,cy);ctx.moveTo(rx,cy);ctx.lineTo(r.x+r.w,cy)}
+      if(r.av){const ty=B(el,'TopAnchorToTop')?pc.y:pc.y+pc.h,by=B(el,'BottomAnchorToTop')?pc.y:pc.y+pc.h;ctx.moveTo(cx,ty);ctx.lineTo(cx,r.y);ctx.moveTo(cx,by);ctx.lineTo(cx,r.y+r.h)}
+      ctx.stroke()}}
+  ctx.lineWidth=2/z;ctx.strokeStyle='#f1c66b';ctx.strokeRect(r.x,r.y,r.w,r.h);
+  if(!n.laid) for(const h of handles(r,!n.parent)){ctx.fillStyle='#f1c66b';ctx.fillRect(h.x-3.5/z,h.y-3.5/z,7/z,7/z);ctx.strokeStyle='#1b1608';ctx.lineWidth=1/z;ctx.strokeRect(h.x-3.5/z,h.y-3.5/z,7/z,7/z)}
+}
+function handles(r,rootOnly){
+  const H=[['nw',r.x,r.y],['n',r.x+r.w/2,r.y],['ne',r.x+r.w,r.y],['e',r.x+r.w,r.y+r.h/2],['se',r.x+r.w,r.y+r.h],['s',r.x+r.w/2,r.y+r.h],['sw',r.x,r.y+r.h],['w',r.x,r.y+r.h/2]].map(([k,x,y])=>({k,x,y}));
+  return rootOnly?H.filter(h=>['e','se','s'].includes(h.k)):H;
+}
+function handleAt(r,p,rootOnly){const t=6/S.view.z;return handles(r,rootOnly).find(h=>Math.abs(p.x-h.x)<=t&&Math.abs(p.y-h.y)<=t)}
+
+/* ---------------- texture + preview modes ---------------- */
+function texIndex(texName){
+  const k=low(texName),out=[];
+  for(const arr of S.items.values()) for(const e of arr){if(e.type!=='Ui2DAnimation') continue;
+    kids(e.el,'Frames').forEach((f,i)=>{if(low(getS(f,'Texture'))!==k) return;const l=P(f,'Location')||{x:0,y:0},s=Z(f,'Size')||{w:0,h:0};out.push({e,i,f,r:{x:l.x,y:l.y,w:s.w,h:s.h}})})}
+  return out;
+}
+function curTexture(){
+  if(!S.sel) return null;
+  if(S.sel.type==='TextureInfo') return S.sel.name;
+  const fr=kids(S.sel.el,'Frames');const f=fr[Math.min(S.frameIdx,fr.length-1)];return f?getS(f,'Texture'):null;
+}
+function drawTexMode(){
+  const tn=curTexture();if(!tn){drawNote('This animation has no frames yet.');return}
+  const img=getTex(tn);const z=S.view.z;
+  const s=img?texScale(tn,img):{w:256,h:256};
+  for(let y=0;y<s.h;y+=16) for(let x=0;x<s.w;x+=16){ctx.fillStyle=((x+y)/16)%2?'#2a2d34':'#22252b';ctx.fillRect(x,y,16,16)}
+  if(img) ctx.drawImage(img,0,0,s.w,s.h); else {drawNote(S.tex.get(low(tn))?.missing?`Texture file not found: ${tn}`:'Loading texture…');}
+  ctx.lineWidth=1/z;
+  S.texHits=texIndex(tn);
+  for(const h of S.texHits){if(S.sel&&h.e.el===S.sel.el) continue;ctx.strokeStyle='rgba(76,195,181,.5)';ctx.strokeRect(h.r.x,h.r.y,h.r.w,h.r.h)}
+  if(S.sel&&S.sel.type==='Ui2DAnimation'){
+    const a=S.sel.el;
+    if(B(a,'Grid')){const cw=N(a,'CellWidth'),ch=N(a,'CellHeight');if(cw&&ch){ctx.strokeStyle='rgba(241,198,107,.25)';for(let x=0;x<=s.w;x+=cw){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,s.h);ctx.stroke()}for(let y=0;y<=s.h;y+=ch){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(s.w,y);ctx.stroke()}}}
+    kids(a,'Frames').forEach((f,i)=>{if(low(getS(f,'Texture'))!==low(tn)) return;const l=P(f,'Location')||{x:0,y:0},sz=Z(f,'Size')||{w:0,h:0};const r={x:l.x,y:l.y,w:sz.w,h:sz.h};
+      ctx.lineWidth=(i===S.frameIdx?2:1)/z;ctx.strokeStyle=i===S.frameIdx?'#f1c66b':'rgba(241,198,107,.5)';ctx.strokeRect(r.x,r.y,r.w,r.h);
+      if(i===S.frameIdx) for(const h of handles(r)){ctx.fillStyle='#f1c66b';ctx.fillRect(h.x-3.5/z,h.y-3.5/z,7/z,7/z)}});
+  }
+}
+function drawNote(t){ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#9a9da6';ctx.font=`${14*(devicePixelRatio||1)}px Inter, sans-serif`;ctx.fillText(t,20*(devicePixelRatio||1),60*(devicePixelRatio||1));ctx.restore()}
+function drawPreview(){
+  const e=S.sel;if(!e){return}const el=e.el,t=e.type;
+  ctx.font='11px Inter, sans-serif';ctx.textBaseline='top';
+  if(t==='WindowDrawTemplate'){const r={x:0,y:0,w:260,h:180};const tb=kid(el,'Titlebar');const th=Math.max(nat(getS(tb,'Middle')).h,nat(getS(tb,'Top')).h,nat(getS(tb,'TopLeft')).h)||0;
+    const fr={x:0,y:th,w:r.w,h:r.h-th};const bg=getS(el,'Background');if(bg) drawTiled(ctx,bg,fr,null,N(el,'BackgroundDrawType')===1);
+    drawFrame(ctx,kid(el,'Border'),fr);if(th) drawFrame(ctx,tb,{x:0,y:0,w:r.w,h:th});
+    const cb=kid(el,'CloseBox'),an=cb&&getS(cb,'Normal'),z=nat(an);if(z.w&&th) drawAnim(ctx,an,r.w-z.w-4,(th-z.h)/2);
+    ctx.fillStyle='#9a9da6';ctx.fillText('Sample 260 × 180 window drawn with this template',0,r.h+8);return}
+  if(t==='ButtonDrawTemplate'){let x=0;for(const st of ['Normal','Pressed','Flyby','Disabled','PressedFlyby','PressedDisabled']){const a=getS(el,st);if(!a) continue;const z=nat(a);drawAnim(ctx,a,x,0,z.w,z.h);ctx.fillStyle='#9a9da6';ctx.fillText(st,x,Math.max(z.h,16)+6);x+=Math.max(z.w,70)+14}return}
+  if(t==='FrameTemplate'){drawFrame(ctx,el,{x:0,y:0,w:200,h:120});return}
+  if(t==='GaugeDrawTemplate'){const bg=getS(el,'Background'),h=nat(bg).h||8;drawAnim(ctx,bg,0,0,200,h);drawAnim(ctx,getS(el,'Fill'),0,0,140,h,{r:200,g:40,b:40});return}
+  if(t==='SliderDrawTemplate'||t==='SpellGemDrawTemplate'||t==='ScrollbarDrawTemplate'){let x=0;for(const c of el.children){const a=c.firstElementChild?getS(c,'Normal'):c.textContent.trim();if(!a||!item(a,'Ui2DAnimation')) continue;const z=nat(a);drawAnim(ctx,a,x,0,z.w,z.h);ctx.fillStyle='#9a9da6';ctx.fillText(c.tagName,x,z.h+6);x+=Math.max(z.w,80)+12}return}
+  drawNote('No visual preview for '+t+'. Edit it in the inspector →');
+}
+
+/* ---------------- edits, undo ---------------- */
+let tx=null;
+function begin(els){tx=[...new Set(els)].map(el=>{if(!S.orig.has(el)) S.orig.set(el,ser(el));return {el,before:el.cloneNode(true)}})}
+function commit(label){
+  if(!tx) return;const items=tx.filter(i=>!i.el.isEqualNode(i.before));tx=null;
+  if(!items.length) return;
+  for(const i of items) i.after=i.el.cloneNode(true);
+  S.undo.push({kind:'edit',items,label});S.redo=[];if(S.undo.length>300) S.undo.shift();
+  for(const i of items) if(i.before.getAttribute('item')!==i.el.getAttribute('item')) regAdd(i.el,entryOf(i.el)?.doc||docOf(i.el));
+  after(label);
+}
+function edit(els,fn,label){begin(Array.isArray(els)?els:[els]);try{fn()}catch(e){tx=null;msg('Edit failed: '+e.message);return}commit(label)}
+const docOf=el=>S.docs.find(d=>d.dom===el.ownerDocument);
+function restore(el,snap){while(el.firstChild) el.removeChild(el.firstChild);for(const a of [...el.attributes]) el.removeAttribute(a.name);for(const a of snap.attributes) el.setAttribute(a.name,a.value);for(const c of snap.childNodes) el.appendChild(c.cloneNode(true))}
+function applyStep(step,dir){
+  if(step.kind==='edit'){for(const i of step.items){restore(i.el,dir<0?i.before:i.after);regAdd(i.el,docOf(i.el))}}
+  else if(step.kind==='add'){
+    if(dir<0){if(step.el.parentNode){dropNode(step.el)}regRemove(step.el);step.doc.added.delete(step.el);for(const i of step.items||[]) restore(i.el,i.before)}
+    else{const root=step.doc.dom.documentElement;root.appendChild(step.doc.dom.createTextNode('\n\t'));root.appendChild(step.el);root.appendChild(step.doc.dom.createTextNode('\n'));step.doc.added.add(step.el);regAdd(step.el,step.doc);for(const i of step.items||[]) restore(i.el,i.after)}
+  }
+}
+function undo(){const s=S.undo.pop();if(!s) return;applyStep(s,-1);S.redo.push(s);after('Undid '+(s.label||'change'))}
+function redo(){const s=S.redo.pop();if(!s) return;applyStep(s,1);S.undo.push(s);after('Redid '+(s.label||'change'))}
+function after(label){
+  S.users=null;S.dl.clear();snapCache=new WeakMap();if(typeof rCache!=='undefined') rCache.clear();
+  if(S.sel&&!S.sel.el.parentNode) S.sel=null;
+  rebuild();draw();renderTree();renderInspector();updateButtons();refreshListMarks();
+  if(label) msg(label);
+}
+function dirtyDocs(){
+  const set=new Map();
+  for(const [el,o] of S.orig){const d=docOf(el);if(!d) continue;
+    if(el.parentNode?ser(el)!==o:(d.origEls||[]).includes(el)) set.set(d,true)}
+  for(const d of S.docs) if([...d.added].some(e=>e.parentNode)) set.set(d,true);
+  return [...set.keys()];
+}
+function isDirtyEl(el){return S.orig.has(el)&&ser(el)!==S.orig.get(el)}
+function updateButtons(){
+  if(S.app==='layout'){$('#bUndo').disabled=!L.undo.length;$('#bRedo').disabled=!L.redo.length;const dn=L.files.filter(fileDirty).length;$('#bSave').disabled=!L.cur;$('#bSave').textContent=dn?`Save layout (${dn} changed)`:'Save layout';return}
+  $('#bUndo').disabled=!S.undo.length;$('#bRedo').disabled=!S.redo.length;
+  const n=dirtyDocs().length;$('#bSave').disabled=!n;$('#bSave').textContent=n?`Save (${n} file${n>1?'s':''})`:'Save';
+}
+function applyRect(n,nr){
+  const el=n.el,pc=n.pc;nr={x:Math.round(nr.x),y:Math.round(nr.y),w:Math.max(1,Math.round(nr.w)),h:Math.max(1,Math.round(nr.h))};
+  if(!n.parent){setPath(el,['Size','CX'],nr.w);setPath(el,['Size','CY'],nr.h);return}
+  const r=n.r;
+  if(r.ah){setPath(el,['LeftAnchorOffset'],B(el,'LeftAnchorToLeft')?nr.x-pc.x:pc.x+pc.w-nr.x);setPath(el,['RightAnchorOffset'],B(el,'RightAnchorToLeft')?nr.x+nr.w-pc.x:pc.x+pc.w-nr.x-nr.w)}
+  else{if(nr.x-pc.x!==(P(el,'Location')||{x:0}).x||kid(el,'Location')) {setPath(el,['Location','X'],nr.x-pc.x)}if(nr.w!==r.w||kid(el,'Size')) setPath(el,['Size','CX'],nr.w)}
+  if(r.av){setPath(el,['TopAnchorOffset'],B(el,'TopAnchorToTop')?nr.y-pc.y:pc.y+pc.h-nr.y);setPath(el,['BottomAnchorOffset'],B(el,'BottomAnchorToTop')?nr.y+nr.h-pc.y:pc.y+pc.h-nr.y-nr.h)}
+  else{if(nr.y-pc.y!==(P(el,'Location')||{y:0}).y||kid(el,'Location')) setPath(el,['Location','Y'],nr.y-pc.y);if(nr.h!==r.h||kid(el,'Size')) setPath(el,['Size','CY'],nr.h)}
+  if(kid(el,'Location')&&!kid(kid(el,'Location'),'X')) setPath(el,['Location','X'],nr.x-pc.x);
+  if(kid(el,'Location')&&!kid(kid(el,'Location'),'Y')) setPath(el,['Location','Y'],nr.y-pc.y);
+  if(kid(el,'Size')&&!kid(kid(el,'Size'),'CX')) setPath(el,['Size','CX'],nr.w);
+  if(kid(el,'Size')&&!kid(kid(el,'Size'),'CY')) setPath(el,['Size','CY'],nr.h);
+}
+function snapV(v,base){if(!S.snap||S.grid<=1) return Math.round(v);return base+Math.round((v-base)/S.grid)*S.grid}
+function duplicate(entry){
+  const doc=entry.doc,el=entry.el;let name=entry.name+'_copy',k=2;while(S.items.has(low(name))) name=entry.name+'_copy'+(k++);
+  const c=el.cloneNode(true);c.setAttribute('item',name);const sid=kid(c,'ScreenID');if(sid) sid.textContent=sid.textContent.trim()+'_copy';
+  const root=doc.dom.documentElement;
+  const parentNode=S.sel&&S.mode==='screen'&&S.nodeByEl.get(el)?.parent;
+  const items=[];
+  if(parentNode){const pe=parentNode.el;if(!S.orig.has(pe)) S.orig.set(pe,ser(pe));items.push({el:pe,before:pe.cloneNode(true)})}
+  root.appendChild(doc.dom.createTextNode('\n\t'));root.appendChild(c);root.appendChild(doc.dom.createTextNode('\n'));
+  doc.added.add(c);regAdd(c,doc);
+  if(parentNode){const pe=parentNode.el;const last=kids(pe,'Pieces').pop();const p=newKid(pe,'Pieces',last);p.textContent=name;
+    const loc=P(c,'Location');if(loc){setPath(c,['Location','X'],loc.x+8);setPath(c,['Location','Y'],loc.y+8)}items[0].after=pe.cloneNode(true)}
+  S.undo.push({kind:'add',doc,el:c,items,label:'Duplicated '+entry.name});S.redo=[];
+  S.sel=entryOf(c);after('Duplicated as '+name+'. It is added to the end of '+doc.name+'.');
+}
+function removeFromParent(n){
+  const pe=n.parent.el;const tag=n.parent.type==='TabBox'?'Pages':'Pieces';
+  const p=kids(pe,tag).find(x=>low(x.textContent.replace(/^[A-Za-z0-9_]+:/,''))===low(n.entry.name));if(!p) return;
+  edit(pe,()=>dropNode(p),`Removed ${n.entry.name} from ${n.parent.entry.name} (the definition itself is kept)`);
+}
+
+/* ---------------- navigation ---------------- */
+function openEntry(e,o={}){
+  if(!e) return;
+  if(S.designVariant&&e.doc!==S.designVariant.doc&&!o.keepVariant){S.designOverlay=null;S.designVariant=null}
+  if(!o.noHist&&S.sel) S.history.push({sel:S.sel,root:S.rootEntry,mode:S.mode});
+  S.frameIdx=0;
+  if(e.type==='Screen'&&!o.inScreen){S.mode='screen';S.rootEntry=e;S.sel=e;rebuild();fit();requestAnimationFrame(fit)}
+  else if(isPiece(e.type)){
+    const inCur=S.mode==='screen'&&S.nodeByEl.get(e.el);
+    if(inCur){S.sel=e}
+    else{let host=null,g=0,cur=e;
+      while(g++<12){const u=usersOf(cur.name)[0];if(!u) break;host=u;if(u.type==='Screen'&&!usersOf(u.name).length) break;cur=u}
+      if(host){S.mode='screen';S.rootEntry=host.type==='Screen'?host:host;rebuild();if(!S.nodeByEl.get(e.el)){S.rootEntry=e;rebuild()}fit()}
+      else{S.mode='screen';S.rootEntry=e;rebuild();fit()}
+      S.sel=e}
+  }
+  else if(e.type==='Ui2DAnimation'||e.type==='TextureInfo'){S.mode='texture';S.sel=e;fitTex()}
+  else{S.mode='preview';S.sel=e;S.view={z:2,px:40,py:60}}
+  draw();renderTree();renderInspector();refreshListMarks();renderCrumbs();
+}
+function back(){const h=S.history.pop();if(!h) return;S.mode=h.mode;S.rootEntry=h.root;S.sel=h.sel;rebuild();if(S.mode==='texture') fitTex(); else fit();draw();renderTree();renderInspector();renderCrumbs()}
+function fit(){
+  if(S.app==='layout') return;
+  if(S.mode==='texture') return fitTex();
+  if(!S.tree) return;const r=cv.getBoundingClientRect(),R=S.tree.r;
+  const z=Math.max(.25,Math.min(6,Math.min((r.width-80)/Math.max(R.w,1),(r.height-100)/Math.max(R.h,1))));
+  const zz=z>=1?Math.floor(z*2)/2:z;S.view={z:zz,px:(r.width-R.w*zz)/2,py:Math.max(48,(r.height-R.h*zz)/2)};draw();
+}
+function fitTex(){if(S.app==='layout') return;const tn=curTexture();const img=tn&&getTex(tn);const s=img?texScale(tn,img):{w:256,h:256};const r=cv.getBoundingClientRect();const z=Math.max(.25,Math.min(4,Math.min((r.width-60)/s.w,(r.height-90)/s.h)));
+  S.view={z,px:(r.width-s.w*z)/2,py:Math.max(48,(r.height-s.h*z)/2)};
+  if(S.sel&&S.sel.type==='Ui2DAnimation'){const f=frameOf(S.sel.name,S.frameIdx);if(f&&f.w&&f.h&&f.w*z<40){const z2=Math.min(8,120/Math.max(f.w,f.h));S.view={z:z2,px:r.width/2-(f.x+f.w/2)*z2,py:r.height/2-(f.y+f.h/2)*z2}}}
+  draw()}
+function renderCrumbs(){
+  const c=$('#crumbs');const bits=[];
+  if(S.history.length) bits.push(`<button id="bBack" title="Back (Backspace)">← Back</button>`);
+  if(S.mode==='screen'&&S.rootEntry) bits.push(`<span class="chip">Window <b>${esc(S.rootEntry.name)}</b> · ${esc(S.rootEntry.doc.name)}</span>`);
+  if(S.mode==='texture'&&S.sel){const tn=curTexture();bits.push(`<span class="chip">Texture <b>${esc(tn||'—')}</b>${tn&&S.tex.get(low(tn))?.skin?' · from '+esc(S.tex.get(low(tn)).skin):''}</span><span class="chip">Drag the gold box to change this frame's source rectangle</span>`)}
+  if(S.mode==='screen') bits.push(`<span class="chip">Preview is approximate: live data, fonts and some game logic aren't simulated</span>`);
+  c.innerHTML=bits.join('');const b=$('#bBack');if(b) b.onclick=back;
+}
+
+/* ---------------- left list ---------------- */
+function listEntries(){
+  const q=low($('#q').value),f=$('#sType').value;const out=[];
+  for(const arr of S.items.values()){const e=arr[arr.length-1];for(const x of arr){
+    if(f==='@top'){if(x.type!=='Screen'||!(S.topNames.has(low(x.name))||!usersOf(x.name).length)) continue}
+    else if(f!=='*'&&x.type!==f) continue;
+    if(q&&!low(x.name).includes(q)&&!low(getS(x.el,'Text')).includes(q)) continue;
+    out.push(x)}void e}
+  out.sort((a,b)=>a.name.localeCompare(b.name));return out;
+}
+function refreshList(){
+  const types=new Set();for(const arr of S.items.values()) for(const e of arr) types.add(e.type);
+  const cur=$('#sType').value;
+  $('#sType').innerHTML=`<option value="@top">Top-level windows</option><option value="Screen">All screens</option><option value="*">Every item</option>`+[...types].sort().map(t=>`<option value="${t}">${t}</option>`).join('');
+  $('#sType').value=[...$('#sType').options].some(o=>o.value===cur)?cur:'@top';
+  const L=listEntries(),max=600;
+  $('#list').innerHTML=L.slice(0,max).map((e,i)=>`<div class="it${S.sel&&S.sel.el===e.el||S.rootEntry&&S.rootEntry.el===e.el?' cur':''}" data-i="${i}" title="${esc(e.name)} · ${esc(e.doc.name)} (${esc(e.doc.skin)})"><span class="t">${ABBR[e.type]||e.type.slice(0,3).toUpperCase()}</span><span class="n">${esc(e.name)}</span>${isDirtyEl(e.el)||e.doc.added.has(e.el)?'<span class="d">●</span>':''}</div>`).join('')+(L.length>max?`<p class="note" style="padding:0 10px">${L.length-max} more: refine the search.</p>`:'')+(L.length?'':'<p class="note" style="padding:0 10px">Nothing matches.</p>');
+  S.listCache=L;
+}
+const refreshListMarks=()=>{if(S.items.size) refreshList()};
+$('#list').addEventListener('click',ev=>{const d=ev.target.closest('.it');if(!d) return;openEntry(S.listCache[+d.dataset.i])});
+
+/* ---------------- tree ---------------- */
+function renderTree(){
+  const t=$('#tree');
+  if(S.mode!=='screen'||!S.tree){t.innerHTML=`<p class="note" style="padding:0 10px">${S.sel?esc(S.sel.type)+' — not part of a window layout.':'Nothing open.'}</p>`;return}
+  const rows=[];
+  const walk=(n,d)=>{rows.push(`<div class="tn${S.sel&&S.sel.el===n.el?' cur':''}${n.hidden||n.offOrient?' hid':''}" style="padding-left:${8+d*12}px" data-el="${rows.length}"${n.offOrient?` title="Not shown at the current preview size: ${n.offOrient}"`:''}><span class="t">${ABBR[n.type]||n.type.slice(0,3).toUpperCase()}</span>${esc(n.entry.name)}${n.offOrient&&n.parent&&!n.parent.offOrient?` <span class="t">· ${esc(n.offOrient)}</span>`:''}${n.type==='TabBox'?` <span class="t">page ${n.active+1}/${(n.pages||[]).length}</span>`:''}</div>`);S.treeRows.push(n);
+    for(const m of n.missing){rows.push(`<div class="tn miss" style="padding-left:${20+d*12}px" title="Referenced in Pieces but not defined anywhere">missing: ${esc(m)}</div>`);S.treeRows.push(null)}
+    for(const k of n.kids) walk(k,d+1)};
+  S.treeRows=[];walk(S.tree,0);t.innerHTML=rows.join('');
+  const cur=t.querySelector('.cur');if(cur) cur.scrollIntoView({block:'nearest'});
+}
+$('#tree').addEventListener('click',ev=>{const d=ev.target.closest('.tn');if(!d||d.dataset.el==null) return;const n=S.treeRows[+d.dataset.el];if(n){S.sel=n.entry;draw();renderTree();renderInspector()}});
+
+/* ---------------- inspector ---------------- */
+let insTab='props';
+function dlFor(type){
+  const id='dl-'+type;if(S.dl.has(id)) return id;
+  const names=[];for(const arr of S.items.values()) for(const e of arr) if(type==='ScreenPiece'?isPiece(e.type):(e.type===type||isA(e.type,type))) names.push(e.name);
+  let d=document.getElementById(id);if(!d){d=document.createElement('datalist');d.id=id;document.body.appendChild(d)}
+  d.innerHTML=names.slice(0,4000).map(n=>`<option value="${esc(n)}">`).join('');S.dl.set(id,1);return id;
+}
+function renderInspector(){
+  const box=$('#props'),e=S.sel;
+  if(insTab==='xml'){showXml();return}
+  if(!e){box.innerHTML='<p class="note">Select a window from the list, then click any piece on the canvas.</p>';return}
+  const top=e.el,n=S.mode==='screen'?S.nodeByEl.get(top):null,us=usersOf(e.name);
+  const h=document.createElement('div');h.className='hd';
+  h.innerHTML=`<span class="ty">${esc(e.type)}</span><div class="nm">${esc(e.name)}</div><div class="meta">${esc(e.doc.name)} · from <b>${esc(e.doc.skin)}</b>${isDirtyEl(top)?' · <span class="warn">edited</span>':''}${e.doc.added.has(top)?' · <span class="warn">new</span>':''}</div>`+
+    (us.length?`<div class="meta">Used in: ${us.slice(0,6).map((u,i)=>`<a href="#" data-u="${i}" style="color:var(--teal)">${esc(u.name)}</a>`).join(', ')}${us.length>6?' …':''}</div>`:'');
+  box.innerHTML='';box.appendChild(h);
+  h.querySelectorAll('[data-u]').forEach(a=>a.onclick=ev=>{ev.preventDefault();openEntry(us[+a.dataset.u])});
+  const acts=document.createElement('div');acts.className='acts';
+  if(n&&n.parent) acts.append(btn('Select parent',()=>{S.sel=n.parent.entry;draw();renderTree();renderInspector()}));
+  if(e.type==='Screen'&&S.rootEntry&&S.rootEntry.el!==top) acts.append(btn('Open as window',()=>openEntry(e)));
+  if(n&&n.type==='TabBox'&&n.pages&&n.pages.length>1) acts.append(btn('Next tab page',()=>{S.pages.set(top,((S.pages.get(top)||0)+1)%n.pages.length);rebuild();draw();renderTree()}));
+  if(e.type==='Screen'&&S.rootEntry&&S.rootEntry.el===top){
+    const base=S.designVariant?S.designVariant.base:e.name,cur=S.designVariant?S.designVariant.n:0;
+    const types=[0,...[1,2,3,4,5,6,7,8,9].filter(n=>fileFor(`EQUI_${base}${n}.xml`))];
+    if(types.length>1){const d=document.createElement('div');d.className='row set';d.innerHTML=`<label>Display type</label><select>${types.map(n=>`<option value="${n}"${n==cur?' selected':''}>${(n?'Type '+n:'Base')+': '+esc(menuNameOf(base,n)||(n?`EQUI_${base}${n}.xml`:'base design'))}${usedType(base)==n?' · in your layout':''}</option>`).join('')}</select><span></span>`;
+      d.querySelector('select').onchange=ev=>{const n=+ev.target.value;n?openVariantInDesigner(base,String(n)):(S.designOverlay=null,S.designVariant=null,openEntry(item(base,'Screen')))};box.appendChild(d)}
+    const lw=S.designLW;if(lw&&lw.ts) gridHelper(box,lw);
+  }
+  acts.append(btn('Duplicate',()=>duplicate(e)));
+  if(n&&n.parent) acts.append(btn('Remove from parent',()=>removeFromParent(n)));
+  box.appendChild(acts);
+  if(n&&n.laid) box.insertAdjacentHTML('beforeend',`<p class="note">Positioned automatically by its layout box (${esc(n.parent.type)}), so it can't be dragged. Change the box's Spacing or Padding instead.</p>`);
+  if(n&&n.missing.length) box.insertAdjacentHTML('beforeend',`<p class="note warn">Pieces not defined anywhere: ${n.missing.map(esc).join(', ')}</p>`);
+  if(n&&!n.laid&&isA(e.type,'ScreenPiece')) quickLayout(box,n);
+  if(e.type==='Ui2DAnimation') frameTools(box,e);
+  fieldsUI(top,e.type,box,top,0);
+}
+function btn(t,fn,cls){const b=document.createElement('button');b.textContent=t;if(cls) b.className=cls;b.onclick=fn;return b}
+function quickLayout(box,n){
+  const el=n.el,r=n.r,pc=n.pc;const d=document.createElement('div');
+  const vals=[['X',r.x-pc.x],['Y',r.y-pc.y],['W',r.w],['H',r.h]];
+  d.innerHTML=`<div class="quick">${vals.map(([k,v])=>`<label>${k}<input type="number" data-k="${k}" value="${v}"></label>`).join('')}</div>`+
+    (n.parent?`<div class="anch"><label><input type="checkbox" data-a="AutoStretch" ${B(el,'AutoStretch')?'checked':''}> Stretch with parent</label><span></span>`+
+    (r.ah||r.av?`<label><input type="checkbox" data-a="LeftAnchorToLeft" ${B(el,'LeftAnchorToLeft')?'checked':''}> left edge → parent left</label><label><input type="checkbox" data-a="RightAnchorToLeft" ${B(el,'RightAnchorToLeft')?'checked':''}> right edge → parent left</label><label><input type="checkbox" data-a="TopAnchorToTop" ${B(el,'TopAnchorToTop')?'checked':''}> top edge → parent top</label><label><input type="checkbox" data-a="BottomAnchorToTop" ${B(el,'BottomAnchorToTop')?'checked':''}> bottom edge → parent top</label>`:'')+`</div>`+
+    `<p class="note">${r.ah||r.av?'Stretched: dragging rewrites the anchor offsets, so the piece keeps following the window as it resizes.':'X and Y are relative to the parent\'s inner area.'}</p>`:'<p class="note">Window size. Its on-screen position (Location) is edited below.</p>');
+  box.appendChild(d);
+  d.querySelectorAll('input[data-k]').forEach(inp=>inp.onchange=()=>{const v=parseInt(inp.value,10);if(isNaN(v)) return;const nr={x:r.x,y:r.y,w:r.w,h:r.h};
+    if(inp.dataset.k==='X') nr.x=pc.x+v;if(inp.dataset.k==='Y') nr.y=pc.y+v;if(inp.dataset.k==='W') nr.w=v;if(inp.dataset.k==='H') nr.h=v;
+    edit(el,()=>applyRect(n,nr),'Moved/resized '+n.entry.name)});
+  d.querySelectorAll('input[data-a]').forEach(inp=>inp.onchange=()=>{const k=inp.dataset.a;
+    edit(el,()=>{const before=rectOf(el,pc);setPath(el,[k],inp.checked?'true':'false');
+      // keep the piece where it is on screen when switching anchors
+      const tmp={...n,r:rectOf(el,pc)};applyRect(tmp,before)},`${k} = ${inp.checked}`)});
+}
+function frameTools(box,e){
+  const fr=kids(e.el,'Frames');const d=document.createElement('div');d.className='acts';
+  if(fr.length>1){const s=document.createElement('select');s.innerHTML=fr.map((f,i)=>`<option value="${i}">Frame ${i+1}: ${esc(getS(f,'Texture')||'')}</option>`).join('');s.value=S.frameIdx;s.onchange=()=>{S.frameIdx=+s.value;fitTex();renderCrumbs()};d.append(s)}
+  d.append(btn('Zoom to frame',fitTex));box.appendChild(d);
+}
+function fieldsUI(el,type,box,top,depth){
+  const defs=fieldsFor(type);const present=new Set([...el.children].map(c=>c.tagName));
+  const only=S.onlySet&&depth===0;let grp=null,owner=null;
+  const known=new Set(defs.map(f=>f.name));
+  for(const f of defs){
+    if(only&&!present.has(f.name)) continue;
+    if(depth===0&&f.owner!==owner){owner=f.owner;grp=document.createElement('details');grp.className='grp';grp.open=true;grp.innerHTML=`<summary>${esc(owner)}</summary>`;box.appendChild(grp)}
+    row(f,el,depth===0?grp:box,top,depth);
+  }
+  const extra=[...el.children].filter(c=>!known.has(c.tagName));
+  if(extra.length){const g=document.createElement('details');g.className='grp';g.open=true;g.innerHTML='<summary>Not in schema</summary>';box.appendChild(g);
+    for(const c of extra){if(c.firstElementChild){const s=document.createElement('div');s.className='note';s.textContent=`<${c.tagName}> block (edit in the XML tab)`;g.appendChild(s)}else row({name:c.tagName,type:'string'},el,g,top,depth,c)}}
+  const absent=defs.filter(f=>!present.has(f.name)||f.many);
+  if(absent.length&&(only||depth>0)){
+    const s=document.createElement('select');s.style.width='100%';s.style.margin='8px 0';
+    s.innerHTML=`<option value="">+ Add a field…</option>`+absent.map(f=>`<option value="${esc(f.name)}">${esc(f.name)}${f.def!==undefined?' (default '+esc(f.def)+')':''}</option>`).join('');
+    s.onchange=()=>{const f=fdef(type,s.value)||defs.find(x=>x.name===s.value);if(!f) return;
+      edit(top,()=>{const sub=S.schema[f.type];const c=f.many?newKid(el,f.name,kids(el,f.name).pop()):ensure(el,f.name);
+        if(!sub||f.ref) c.textContent=f.def??(f.type==='boolean'?'true':f.type==='int'?'0':'');
+        else if(f.type==='Point'){setPath(c,['X'],0);setPath(c,['Y'],0)}else if(f.type==='Size'){setPath(c,['CX'],0);setPath(c,['CY'],0)}
+        else if(f.type==='RGB'||f.type==='TextRGB'){setRGB(el,f.name,{r:255,g:255,b:255})}},'Added '+f.name)};
+    box.appendChild(s);
+  }
+}
+const hex=c=>'#'+[c.r,c.g,c.b].map(v=>Math.max(0,Math.min(255,v|0)).toString(16).padStart(2,'0')).join('');
+function row(f,el,box,top,depth,node){
+  const sub=S.schema[f.type];
+  if(f.many){
+    const list=kids(el,f.name);if(!list.length) return;
+    const w=document.createElement('div');w.className='sub';w.innerHTML=`<div class="sl">${esc(f.name)} <span>(${list.length})</span></div>`;box.appendChild(w);
+    list.forEach((c,i)=>{
+      if(sub&&!f.ref){const s=document.createElement('div');s.className='sub';const hd=document.createElement('div');hd.className='sl';hd.textContent=`${f.name} ${i+1}`;
+        hd.append(btnX(()=>edit(top,()=>dropNode(c),`Removed ${f.name} ${i+1}`)));s.appendChild(hd);fieldsUI(c,f.type,s,top,depth+1);w.appendChild(s);return}
+      const r=document.createElement('div');r.className='row set';const inp=document.createElement('input');inp.value=c.textContent.trim();
+      if(f.ref) inp.setAttribute('list',dlFor(f.type));
+      inp.onchange=()=>edit(top,()=>{c.textContent=inp.value},`${f.name} ${i+1} = ${inp.value}`);
+      const lb=document.createElement('label');lb.textContent=i===0?f.name:'';r.append(lb,inp);
+      const tools=document.createElement('span');tools.style.display='flex';
+      if(f.ref) tools.append(btnGo(()=>inp.value,f.type));
+      if(i>0) tools.append(mini('↑','Move up',()=>edit(top,()=>{const p=list[i-1],t=p.textContent;p.textContent=c.textContent;c.textContent=t},'Reordered '+f.name)));
+      tools.append(btnX(()=>edit(top,()=>dropNode(c),`Removed ${inp.value} from ${f.name}`)));r.append(tools);w.appendChild(r);
+    });
+    const add=mini('+ add','Add another '+f.name,()=>edit(top,()=>{const c=newKid(el,f.name,list[list.length-1]);if(!sub||f.ref) c.textContent=''},'Added '+f.name));add.style.color='var(--teal)';w.appendChild(add);
+    return;
+  }
+  const c=node||kid(el,f.name);
+  if(sub&&!f.ref){
+    if(!c){const r=document.createElement('div');r.className='row';r.innerHTML=`<label>${esc(f.name)}</label>`;r.append(mini('+ add','',()=>edit(top,()=>{if(f.type==='RGB'||f.type==='TextRGB') setRGB(el,f.name,{r:255,g:255,b:255});else ensure(el,f.name)},'Added '+f.name)));box.appendChild(r);return}
+    if(f.type==='RGB'||f.type==='TextRGB'){const col={r:N(c,'R'),g:N(c,'G'),b:N(c,'B'),a:getS(c,'Alpha')!=null?N(c,'Alpha'):255};
+      const r=document.createElement('div');r.className='row set';const lb=document.createElement('label');lb.textContent=f.name;
+      const p=document.createElement('div');p.className='pair';const ci=document.createElement('input');ci.type='color';ci.value=hex(col);
+      const ai=document.createElement('input');ai.type='number';ai.min=0;ai.max=255;ai.value=col.a;ai.title='Alpha';
+      const t=document.createElement('span');t.className='note';t.textContent=`${col.r},${col.g},${col.b}`;
+      ci.onchange=()=>{const v=ci.value;edit(top,()=>setRGB(el,f.name,{r:parseInt(v.slice(1,3),16),g:parseInt(v.slice(3,5),16),b:parseInt(v.slice(5,7),16),a:+ai.value}),f.name+' = '+v)};
+      ai.onchange=()=>edit(top,()=>setRGB(el,f.name,{...col,a:+ai.value}),f.name+' alpha = '+ai.value);
+      p.append(ci,ai,t);r.append(lb,p,btnX(()=>edit(top,()=>dropNode(c),'Removed '+f.name)));box.appendChild(r);return}
+    if(f.type==='Point'||f.type==='Size'){const ks=f.type==='Point'?['X','Y']:['CX','CY'];
+      const r=document.createElement('div');r.className='row set';const lb=document.createElement('label');lb.textContent=f.name;const p=document.createElement('div');p.className='pair';
+      for(const k of ks){const i=document.createElement('input');i.type='number';i.value=N(c,k);i.title=k;i.onchange=()=>edit(top,()=>setPath(c,[k],parseInt(i.value,10)||0),`${f.name}.${k} = ${i.value}`);p.append(i)}
+      r.append(lb,p,btnX(()=>edit(top,()=>dropNode(c),'Removed '+f.name)));box.appendChild(r);return}
+    const s=document.createElement('div');s.className='sub';const hd=document.createElement('div');hd.className='sl';hd.textContent=f.name;hd.append(btnX(()=>edit(top,()=>dropNode(c),'Removed '+f.name)));
+    s.appendChild(hd);fieldsUI(c,f.type,s,top,depth+1);box.appendChild(s);return;
+  }
+  const r=document.createElement('div');r.className='row'+(c?' set':'');const lb=document.createElement('label');lb.textContent=f.name;lb.title=f.name+(f.def!==undefined?` (default: ${f.def})`:'');
+  let inp;const cur=c?c.textContent.trim():'';
+  if(f.type==='boolean'){inp=document.createElement('select');inp.innerHTML=`<option value="">default${f.def!==undefined?' ('+esc(f.def)+')':''}</option><option>true</option><option>false</option>`;inp.value=c?low(cur):''}
+  else{inp=document.createElement('input');if(f.type==='int') inp.type='number';inp.value=cur;if(f.def!==undefined) inp.placeholder=f.def;if(f.ref) inp.setAttribute('list',dlFor(f.type))}
+  inp.onchange=()=>{const v=inp.value;edit(top,()=>{if(v===''&&f.type==='boolean'){if(c) dropNode(c)}else setPath(el,[f.name],v)},`${f.name} = ${v||'(default)'}`)};
+  const tools=document.createElement('span');tools.style.display='flex';
+  if(f.ref) tools.append(btnGo(()=>inp.value,f.type));
+  if(c) tools.append(btnX(()=>edit(top,()=>dropNode(c),'Removed '+f.name)));
+  r.append(lb,inp,tools);box.appendChild(r);
+}
+function mini(t,title,fn){const b=document.createElement('button');b.className='x';b.textContent=t;b.title=title;b.onclick=fn;return b}
+function btnX(fn){return mini('×','Remove this field (falls back to the default)',fn)}
+function btnGo(get,type){const b=document.createElement('button');b.className='go';b.textContent='↗';b.title='Open this item';b.onclick=()=>{const e=item(get(),type==='ScreenPiece'?'@piece':type)||item(get());if(e) openEntry(e,{inScreen:type==='ScreenPiece'});else msg('No item named '+get()+' is defined in the loaded files.')};return b}
+function showXml(){const e=S.sel;$('#xmltxt').value=e?ser(e.el).replace(/\r/g,''):'';$('#xmlerr').textContent=''}
+$('#bXml').onclick=()=>{
+  const e=S.sel;if(!e) return;const txt=$('#xmltxt').value;
+  const d=new DOMParser().parseFromString('<r>'+sanitize(txt,-1)+'</r>','application/xml');
+  const pe=d.getElementsByTagName('parsererror')[0];if(pe){$('#xmlerr').textContent='XML error: '+pe.textContent.split('\n')[0];return}
+  const nel=d.documentElement.firstElementChild;if(!nel){$('#xmlerr').textContent='No element found.';return}
+  if(nel.tagName!==e.el.tagName){$('#xmlerr').textContent=`The element type must stay <${e.el.tagName}>.`;return}
+  const imp=e.el.ownerDocument.importNode(nel,true);
+  edit(e.el,()=>restore(e.el,imp),'Applied XML to '+e.name);$('#xmlerr').textContent='Applied.';
+};
+$('#tProps').onclick=()=>{insTab='props';$('#tProps').classList.add('on');$('#tXml').classList.remove('on');$('#props').style.display='';$('#xmlbox').style.display='none';renderInspector()};
+$('#tXml').onclick=()=>{insTab='xml';$('#tXml').classList.add('on');$('#tProps').classList.remove('on');$('#props').style.display='none';$('#xmlbox').style.display='flex';showXml()};
+$('#cSet').onchange=()=>{S.onlySet=$('#cSet').checked;renderInspector()};
+
+/* ---------------- canvas interaction ---------------- */
+let drag=null,space=false;
+const toW=ev=>{const r=cv.getBoundingClientRect();return {x:(ev.clientX-r.left-S.view.px)/S.view.z,y:(ev.clientY-r.top-S.view.py)/S.view.z}};
+const inR=(r,p)=>p.x>=r.x&&p.y>=r.y&&p.x<r.x+r.w&&p.y<r.y+r.h;
+const vis=n=>!n.offOrient&&!(n.hidden&&!S.hidden);
+function hits(p){return S.nodes.filter(n=>vis(n)&&inR(n.r,p))}
+cv.addEventListener('pointerdown',ev=>{
+  if(S.app==='layout') return lDown(ev);
+  cv.setPointerCapture(ev.pointerId);const p=toW(ev);
+  if(ev.button===1||ev.button===2||space){drag={kind:'pan',sx:ev.clientX,sy:ev.clientY,px:S.view.px,py:S.view.py};return}
+  if(S.mode==='texture') return texDown(p,ev);
+  if(S.mode!=='screen') {drag={kind:'pan',sx:ev.clientX,sy:ev.clientY,px:S.view.px,py:S.view.py};return}
+  const sn=selNode();
+  if(sn&&!sn.laid){const h=handleAt(sn.r,p,!sn.parent);if(h){drag={kind:'resize',h:h.k,el:sn.el,start:{...sn.r},p0:p,moved:false};return}}
+  const H=hits(p);
+  for(const n of S.nodes) if(n.tabs) for(const t of n.tabs) if(inR(t,p)){S.pages.set(n.el,t.i);S.sel=n.entry;rebuild();draw();renderTree();renderInspector();return}
+  if(!H.length){S.sel=null;draw();renderTree();renderInspector();drag={kind:'pan',sx:ev.clientX,sy:ev.clientY,px:S.view.px,py:S.view.py};return}
+  let n=H[H.length-1];
+  if(ev.altKey&&sn){const i=H.indexOf(sn);n=H[(i-1+H.length)%H.length]}
+  else if(sn&&H.includes(sn)&&!ev.shiftKey&&H.length>1&&n!==sn&&sn.r.w*sn.r.h<n.r.w*n.r.h) n=sn;
+  S.sel=n.entry;draw();renderTree();renderInspector();
+  if(n.parent&&!n.laid) drag={kind:'move',el:n.el,start:{...n.r},p0:p,moved:false};
+});
+cv.addEventListener('pointermove',ev=>{
+  if(S.app==='layout') return lMove(ev);
+  const p=toW(ev);$('#pos').textContent=`${Math.round(p.x)}, ${Math.round(p.y)}`;
+  if(!drag){if(S.mode==='screen'){const H=hits(p);const h=H[H.length-1];const el=h?h.el:null;if(el!==S.hover){S.hover=el;draw();if(h) msg(`${h.type} ${h.entry.name}  ·  ${h.r.w}×${h.r.h}`)}
+    const sn=selNode();const hd=sn&&!sn.laid&&handleAt(sn.r,p,!sn.parent);cv.style.cursor=hd?({n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',ne:'nesw-resize',sw:'nesw-resize',nw:'nwse-resize',se:'nwse-resize'}[hd.k]):(h&&h.parent&&!h.laid?'move':'default')}
+    else if(S.mode==='texture'){const r=texFrameRect();const hd=r&&handleAt(r,p);cv.style.cursor=hd?'nwse-resize':(r&&inR(r,p)?'move':'default')}
+    return}
+  if(drag.kind==='pan'){S.view.px=drag.px+ev.clientX-drag.sx;S.view.py=drag.py+ev.clientY-drag.sy;draw();return}
+  const dx=p.x-drag.p0.x,dy=p.y-drag.p0.y;
+  if(!drag.moved){if(Math.abs(dx)*S.view.z<3&&Math.abs(dy)*S.view.z<3) return;drag.moved=true;begin([drag.el])}
+  if(drag.kind==='tex'||drag.kind==='texr') return texMove(dx,dy);
+  const n=S.nodeByEl.get(drag.el);if(!n) return;const s=drag.start,pc=n.pc;let nr={...s};
+  if(drag.kind==='move'){nr.x=snapV(s.x+dx,pc.x);nr.y=snapV(s.y+dy,pc.y)}
+  else{const k=drag.h;
+    if(k.includes('e')) nr.w=Math.max(1,snapV(s.x+s.w+dx,pc.x)-s.x);
+    if(k.includes('s')) nr.h=Math.max(1,snapV(s.y+s.h+dy,pc.y)-s.y);
+    if(k.includes('w')){const x=Math.min(snapV(s.x+dx,pc.x),s.x+s.w-1);nr.x=x;nr.w=s.x+s.w-x}
+    if(k.includes('n')){const y=Math.min(snapV(s.y+dy,pc.y),s.y+s.h-1);nr.y=y;nr.h=s.y+s.h-y}}
+  applyRect(n,nr);rebuild();draw();msg(`${n.entry.name}: x ${nr.x-pc.x}, y ${nr.y-pc.y}, ${nr.w}×${nr.h}`);
+});
+cv.addEventListener('pointerup',()=>{if(S.app==='layout') return lUp();if(drag&&drag.moved){const n=S.sel;commit((drag.kind==='move'?'Moved ':'Resized ')+(n?n.name:''))}else if(drag&&drag.kind!=='pan'&&tx){tx=null}drag=null});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('wheel',ev=>{ev.preventDefault();const r=cv.getBoundingClientRect();const mx=ev.clientX-r.left,my=ev.clientY-r.top;
+  if(ev.shiftKey){S.view.px-=ev.deltaY;draw();return}
+  const z0=S.view.z,z=Math.max(.2,Math.min(16,z0*Math.pow(1.0015,-ev.deltaY)));S.view.px=mx-(mx-S.view.px)*z/z0;S.view.py=my-(my-S.view.py)*z/z0;S.view.z=z;draw()},{passive:false});
+function texFrameRect(){if(!S.sel||S.sel.type!=='Ui2DAnimation') return null;const f=kids(S.sel.el,'Frames')[S.frameIdx];if(!f) return null;const l=P(f,'Location')||{x:0,y:0},s=Z(f,'Size')||{w:0,h:0};return {x:l.x,y:l.y,w:s.w,h:s.h,f}}
+function texDown(p,ev){
+  const r=texFrameRect();
+  if(r){const h=handleAt(r,p);if(h){drag={kind:'texr',h:h.k,el:S.sel.el,start:{...r},p0:p,moved:false};return}if(inR(r,p)){drag={kind:'tex',el:S.sel.el,start:{...r},p0:p,moved:false};return}}
+  const hit=(S.texHits||[]).filter(h=>inR(h.r,p)).sort((a,b)=>a.r.w*a.r.h-b.r.w*b.r.h)[0];
+  if(hit){S.history.push({sel:S.sel,root:S.rootEntry,mode:S.mode});S.sel=hit.e;S.frameIdx=hit.i;draw();renderInspector();renderCrumbs();renderTree();refreshListMarks();msg('Animation '+hit.e.name);return}
+  drag={kind:'pan',sx:ev.clientX,sy:ev.clientY,px:S.view.px,py:S.view.py};
+}
+function texMove(dx,dy){
+  const f=kids(S.sel.el,'Frames')[S.frameIdx];const s=drag.start;let nr={x:s.x,y:s.y,w:s.w,h:s.h};const g=v=>Math.round(v);
+  if(drag.kind==='tex'){nr.x=g(s.x+dx);nr.y=g(s.y+dy)}
+  else{const k=drag.h;if(k.includes('e')) nr.w=Math.max(1,g(s.w+dx));if(k.includes('s')) nr.h=Math.max(1,g(s.h+dy));if(k.includes('w')){nr.x=Math.min(g(s.x+dx),s.x+s.w-1);nr.w=s.x+s.w-nr.x}if(k.includes('n')){nr.y=Math.min(g(s.y+dy),s.y+s.h-1);nr.h=s.y+s.h-nr.y}}
+  setPath(f,['Location','X'],nr.x);setPath(f,['Location','Y'],nr.y);setPath(f,['Size','CX'],nr.w);setPath(f,['Size','CY'],nr.h);
+  draw();msg(`${S.sel.name} frame ${S.frameIdx+1}: ${nr.x}, ${nr.y}  ${nr.w}×${nr.h}`);
+}
+addEventListener('keydown',ev=>{
+  const tag=(ev.target.tagName||'').toLowerCase();if(tag==='input'||tag==='textarea'||tag==='select') return;
+  if(ev.key===' '){space=true;cv.style.cursor='grab';ev.preventDefault();return}
+  const mod=ev.ctrlKey||ev.metaKey;
+  if(S.app==='layout') return lKey(ev,mod);
+  if(mod&&ev.key.toLowerCase()==='z'){ev.preventDefault();ev.shiftKey?redo():undo();return}
+  if(mod&&ev.key.toLowerCase()==='y'){ev.preventDefault();redo();return}
+  if(mod&&ev.key.toLowerCase()==='d'&&S.sel){ev.preventDefault();duplicate(S.sel);return}
+  if(ev.key==='f'||ev.key==='F'){fit();return}
+  if(ev.key==='Backspace'&&S.history.length){ev.preventDefault();back();return}
+  const sn=selNode();
+  if(ev.key==='Escape'&&sn&&sn.parent){S.sel=sn.parent.entry;draw();renderTree();renderInspector();return}
+  if(ev.key==='Delete'&&sn&&sn.parent){removeFromParent(sn);return}
+  const arrows={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
+  if(arrows[ev.key]&&sn&&sn.parent&&!sn.laid){ev.preventDefault();const [dx,dy]=arrows[ev.key].map(v=>v*(ev.shiftKey?10:1));const r=sn.r;
+    edit(sn.el,()=>applyRect(sn,ev.altKey?{x:r.x,y:r.y,w:r.w+dx,h:r.h+dy}:{x:r.x+dx,y:r.y+dy,w:r.w,h:r.h}),'Nudged '+sn.entry.name)}
+});
+addEventListener('keyup',ev=>{if(ev.key===' '){space=false;cv.style.cursor='default'}});
+
+/* ---------------- toolbar ---------------- */
+$('#bOpen').onclick=()=>$('#fDir').click();
+$('#fDir').onchange=async()=>{const fs=[...$('#fDir').files];if(!fs.length) return;if(dirtyDocs().length&&!await ask('Open another folder?','Your unsaved edits will be discarded.')) return;await ingest(fs.map(f=>[f,f.webkitRelativePath||f.name]));$('#fDir').value=''};
+const em=$('#empty');
+['dragenter','dragover'].forEach(t=>document.addEventListener(t,e=>{e.preventDefault();em.classList.add('over')}));
+document.addEventListener('dragleave',e=>{if(!e.relatedTarget) em.classList.remove('over')});
+document.addEventListener('drop',async e=>{e.preventDefault();em.classList.remove('over');const items=[...e.dataTransfer.items];if(!items.length) return;msg('Reading dropped folder…');const pairs=await readDropped(items);if(pairs.length) await ingest(pairs)});
+$('#sSkin').onchange=async()=>{const v=$('#sSkin').value;if(dirtyDocs().length&&!await ask('Switch skin?','Your unsaved edits will be discarded. Save them first if you want to keep them.')){$('#sSkin').value=S.skin;return}S.skin=v;await loadSkin()};
+$('#sRoot').onchange=async()=>{const v=$('#sRoot').value;if(dirtyDocs().length&&!await ask('Switch to '+v+'?','Your unsaved edits will be discarded.')){$('#sRoot').value=S.rootFile;return}S.rootFile=v;await loadSkin()};
+$('#q').oninput=refreshList;$('#sType').onchange=refreshList;
+$('#bUndo').onclick=()=>S.app==='layout'?lUndo():undo();$('#bRedo').onclick=()=>S.app==='layout'?lRedo():redo();$('#bFit').onclick=()=>S.app==='layout'?lFit():fit();
+$('#sGrid').onchange=()=>{S.grid=+$('#sGrid').value;draw()};
+const tog=(id,k)=>{$(id).onclick=()=>{S[k]=!S[k];$(id).classList.toggle('on',S[k]);rebuild();draw()}};
+tog('#bSnap','snap');tog('#bOut','outlines');tog('#bHid','hidden');tog('#bSmooth','smooth');
+addEventListener('beforeunload',e=>{if(dirtyDocs().length||L.files.some(fileDirty)){e.preventDefault();e.returnValue=''}});
+function ask(t,m){return new Promise(res=>{$('#askT').textContent=t;$('#askM').textContent=m;$('#mAsk').classList.add('open');const done=v=>{$('#mAsk').classList.remove('open');res(v)};$('#askY').onclick=()=>done(true);$('#askN').onclick=()=>done(false)})}
+
+/* ---------------- problems ---------------- */
+$('#bCheck').onclick=()=>{
+  const out=[...S.problems.map(p=>({t:p.t}))];
+  const texSeen=new Set();
+  for(const arr of S.items.values()) for(const e of arr){
+    for(const f of fieldsFor(e.type)){if(!f.ref) continue;
+      for(const c of kids(e.el,f.name)){const v=c.textContent.trim();if(!v||v==='none') continue;
+        const want=f.type==='ScreenPiece'?'@piece':f.type;if(!item(v,want)&&!(f.type==='TextureInfo'&&texFile(v))) out.push({t:`${e.name}: ${f.name} → "${v}" is not defined`,e})}}
+    if(e.type==='Ui2DAnimation') for(const fr of kids(e.el,'Frames')){const t=getS(fr,'Texture');if(t&&!texSeen.has(low(t))){texSeen.add(low(t));if(!texFile(t)) out.push({t:`Texture file missing: ${t} (used by ${e.name})`,e})}}
+  }
+  const dups=[];for(const [k,arr] of S.items){const by={};for(const e of arr){(by[e.type]=by[e.type]||[]).push(e)}for(const t in by) if(by[t].length>1) dups.push(by[t])}
+  for(const d of dups.slice(0,200)) out.push({t:`${d[0].type} "${d[0].name}" is defined ${d.length}× (${d.map(x=>x.doc.name).join(', ')}); the last one wins here`,e:d[d.length-1]});
+  S.probs=out;
+  $('#probList').innerHTML=out.length?`<p class="note">${out.length} issue${out.length>1?'s':''} found. Many default-UI references are harmless, because the game ignores names it can't find. Click one to jump to it.</p><ul>`+out.slice(0,800).map((p,i)=>`<li class="${p.e?'prob':''}" data-i="${i}">${esc(p.t)}</li>`).join('')+'</ul>':'<p>No problems found.</p>';
+  $('#mProb').classList.add('open');
+};
+$('#probList').onclick=ev=>{const li=ev.target.closest('li[data-i]');if(!li) return;const p=S.probs[+li.dataset.i];if(p&&p.e){$('#mProb').classList.remove('open');openEntry(p.e)}};
+$('#bProbX').onclick=()=>$('#mProb').classList.remove('open');
+
+/* ---------------- saving ---------------- */
+function buildText(doc){
+  const t=doc.text;const nl=doc.crlf?'\r\n':'\n';const fix=s=>doc.crlf?s.replace(/\r?\n/g,'\r\n'):s;
+  if(!doc.spanOk){const decl=(t.match(/^\uFEFF?\s*<\?xml[^>]*\?>/)||[''])[0].replace(/^\uFEFF/,'');return (decl?decl+nl:'')+fix(ser(doc.dom.documentElement))+nl}
+  let out='',pos=0;
+  doc.spans.forEach(([a,b],i)=>{const el=doc.origEls[i];const removed=!el.parentNode;const changed=!removed&&S.orig.has(el)&&ser(el)!==S.orig.get(el);
+    if(removed||changed){out+=t.slice(pos,a)+(removed?'':fix(ser(el)));pos=b}});
+  const added=[...doc.added].filter(e=>e.parentNode);
+  if(added.length&&doc.rootClose>=0){out+=t.slice(pos,doc.rootClose);pos=doc.rootClose;for(const e of added) out+='\t'+fix(ser(e))+nl}
+  return out+t.slice(pos);
+}
+const stamp=()=>{const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`};
+let saveSel=0;
+$('#bSave').onclick=()=>{
+  const D=dirtyDocs();if(!D.length) return;
+  $('#saveSkin').value=S.skin==='default'?'MyUI':S.skin;
+  const upd=()=>{const sk=$('#saveSkin').value.trim()||'MyUI';$('#zA').textContent=sk;$('#zB').textContent='_backup_'+stamp();
+    $('#saveNote').innerHTML=sk.toLowerCase()==='default'?'<span class="warn">Saving into default is risky: game patches overwrite that folder. A custom skin folder is safer, and you load it in game with <code>/loadskin '+esc(sk)+'</code>.</span>':
+      (sk!==S.skin&&S.skin!=='default'?`<span class="warn">"${esc(sk)}" is a different folder from the skin you're editing (${esc(S.skin)}). It will only contain the changed files, and everything else will come from default, not ${esc(S.skin)}.</span>`:`Copy the <b>${esc(sk)}</b> folder from the zip into <code>uifiles</code>, then type <code>/loadskin ${esc(sk)} 1</code> in game.`)};
+  $('#saveSkin').oninput=upd;upd();
+  $('#saveList').innerHTML='<p class="note">Changed files (click one to pick it for Copy):</p><ul>'+D.map((d,i)=>`<li class="prob" data-i="${i}" style="${i===saveSel?'color:var(--brass2)':''}">${esc(d.name)} <span class="note">from ${esc(d.skin)}</span></li>`).join('')+'</ul>';
+  $('#saveList').onclick=ev=>{const li=ev.target.closest('li');if(!li) return;saveSel=+li.dataset.i;$('#saveList').querySelectorAll('li').forEach((x,i)=>x.style.color=i===saveSel?'var(--brass2)':'')};
+  saveSel=Math.min(saveSel,D.length-1);$('#saveMsg').textContent='';$('#mSave').classList.add('open');S.saveDocs=D;
+};
+$('#bSaveX').onclick=()=>$('#mSave').classList.remove('open');
+$('#bCopy').onclick=async()=>{const d=S.saveDocs[saveSel];try{await navigator.clipboard.writeText(buildText(d));$('#saveMsg').textContent=`Copied ${d.name}. Paste it over the file in your ${$('#saveSkin').value} folder (after backing up the original).`}catch(e){$('#saveMsg').textContent='Clipboard not available here.'}};
+$('#bZip').onclick=async()=>{
+  const sk=($('#saveSkin').value.trim()||'MyUI').replace(/[\\/:*?"<>|]/g,'_');const st='_backup_'+stamp();const files=[];
+  const readme=[`EQ UI Workbench export, ${new Date().toLocaleString()}`,'',`${sk}/  your edited files.`,`${st}/  the original of every file above, exactly as it was on disk (sub-folder = the skin it came from).`,'',
+    'To install:','1. Close EverQuest (or be ready to reload the skin).',`2. Copy the "${sk}" folder into your uifiles folder, merging it with any existing "${sk}" folder.`,`3. In game: /loadskin ${sk} 1`,'',
+    'To undo: copy the files from the backup folder back to where they came from.','','Files:',...S.saveDocs.map(d=>`  ${d.name}  (original from ${d.skin})`)].join('\r\n');
+  files.push({name:'README.txt',data:new TextEncoder().encode(readme)});
+  for(const d of S.saveDocs){files.push({name:`${sk}/${d.name}`,data:encode(buildText(d),d)});files.push({name:`${st}/${d.skin}/${d.name}`,data:d.bytes})}
+  const z=zip(files);const fname=`${sk}_ui_edits_${stamp()}.zip`;
+  $('#saveMsg').textContent='Preparing download…';
+  try{await save(fname,z);$('#saveMsg').textContent='Saved '+fname+'.'}catch(e){$('#saveMsg').textContent=e&&e.code==='declined'?'Download cancelled.':'Download failed: '+(e&&(e.message||e.code)||e)}
+};
+let dlCap;
+async function save(name,bytes){
+  if(window.claude&&typeof window.claude.use==='function'){if(dlCap===undefined) dlCap=await window.claude.use('downloads');if(dlCap){await dlCap.save({filename:name,data:new Blob([bytes])});return}}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([bytes],{type:'application/zip'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);
+}
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+const crc32=u=>{let c=0xFFFFFFFF;for(let i=0;i<u.length;i++) c=CRC[(c^u[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0};
+function zip(files){
+  const d=new Date(),dt=((d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1)),dd=(((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate());
+  const parts=[],cen=[];let off=0;const te=new TextEncoder();
+  for(const f of files){const nm=te.encode(f.name),c=crc32(f.data),sz=f.data.length;
+    const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(8,0,true);h.setUint16(10,dt,true);h.setUint16(12,dd,true);h.setUint32(14,c,true);h.setUint32(18,sz,true);h.setUint32(22,sz,true);h.setUint16(26,nm.length,true);
+    parts.push(new Uint8Array(h.buffer),nm,f.data);
+    const ch=new DataView(new ArrayBuffer(46));ch.setUint32(0,0x02014b50,true);ch.setUint16(4,20,true);ch.setUint16(6,20,true);ch.setUint16(8,0x0800,true);ch.setUint16(12,dt,true);ch.setUint16(14,dd,true);ch.setUint32(16,c,true);ch.setUint32(20,sz,true);ch.setUint32(24,sz,true);ch.setUint16(28,nm.length,true);ch.setUint32(42,off,true);
+    cen.push(new Uint8Array(ch.buffer),nm);off+=30+nm.length+sz}
+  const cs=cen.reduce((a,b)=>a+b.length,0);const e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cs,true);e.setUint32(16,off,true);
+  const all=[...parts,...cen,new Uint8Array(e.buffer)];const out=new Uint8Array(all.reduce((a,b)=>a+b.length,0));let p=0;for(const a of all){out.set(a,p);p+=a.length}return out;
+}
+
+/* ---- designer <-> layout bridge ---- */
+function menuNameOf(base,n){
+  if(!n){const e=item(base,'Screen');return e&&!S.designVariant?getS(e.el,'MenuName'):(S.items.size&&(S.items.get(low(base))||[]).filter(x=>x.type==='Screen').map(x=>getS(x.el,'MenuName')).pop())}
+  const v=S.variants.get(base+'|'+n);if(v===undefined&&!S.variants.has(base+'|'+n)){variant(base,String(n));return null}
+  return v&&v.entry?getS(v.entry.el,'MenuName'):null}
+function usedType(base){if(!L.cur) return null;const w=windows().find(x=>x.rep&&x.fam===base&&x.state==='shown');return w?w.dtype:null}
+function layoutWinFor(el){if(!L.cur||!S.items.size) return null;
+  for(const w of windows()){const sc=screenFor(w.name);if(sc&&sc.entry&&sc.entry.el===el&&(w.rep||w.name===L.sel)) return w}
+  return null}
+async function openVariantInDesigner(base,n){
+  const key=base+'|'+n;let v=S.variants.get(key);
+  if(v===undefined||!S.variants.has(key)){variant(base,n);for(let i=0;i<100&&S.variants.get(key)===undefined;i++) await new Promise(r=>setTimeout(r,50));v=S.variants.get(key)}
+  if(!v||!v.entry){msg(`Couldn't open EQUI_${base}${n}.xml.`);return}
+  if(!S.docs.includes(v.doc)) S.docs.push(v.doc); // so edits to it are saved (with a backup) like any other file
+  S.designOverlay=v.overlay;S.designVariant={...v,n};
+  if(S.app!=='design') switchApp('design');
+  openEntry(v.entry,{keepVariant:true});
+  msg(`Editing display type ${n} of ${base} (${v.file}, from ${v.doc.skin}).`);
+}
+/* grid windows (spell bar, hotbars): the orientation templates hold space back for pieces like the spellbook button.
+   "Fit" gives back any held-back strip that no visible piece uses any more, so the game's snap-to-contents shrinks the window. */
+function gridHelper(box,lw){
+  const t=lw.ts,root=S.tree;if(!root) return;
+  const tplNames=kids(root.el,'Pieces').map(p=>p.textContent.trim().replace(/^[A-Za-z0-9_]+:/,'')).filter(n=>/Template$/.test(n));
+  const q=snapTo(t,lw.w,lw.h,'w',lw.so),pc=S.previewCols.get(root.el)||0;
+  const d=document.createElement('details');d.className='grp';d.open=true;
+  const sides=x=>['t','b','l','r'].map(k=>x[k]).join('/');
+  d.innerHTML=`<summary>Grid and fit to contents</summary>
+    <p class="note">${t.n} cells of ${t.cw}×${t.ch} in <b>${esc(t.box)}</b>. Showing ${q.cols} column${q.cols>1?'s':''} × ${q.rows} row${q.rows>1?'s':''} = ${q.w}×${q.h}, using the <b>${q.horiz?'horizontal':'vertical'}</b> layout (the game switches to horizontal at 2+ columns).</p>
+    <div class="row set"><label>Preview columns</label><select id="gCols"><option value="0">${lw.fromLayout?'as in your layout':'default size'}</option>${Array.from({length:t.n},(_,i)=>i+1).map(c=>`<option value="${c}"${c===pc?' selected':''}>${c}</option>`).join('')}</select><span></span></div>
+    <p class="note">Space each layout holds back for other pieces (top/bottom/left/right): vertical ${sides(t.vt)}, horizontal ${sides(t.ht)}${t.nt?', no-spinner '+sides(t.nt):''}.</p>`;
+  d.querySelector('#gCols').onchange=ev=>{const v=+ev.target.value;v?S.previewCols.set(root.el,v):S.previewCols.delete(root.el);rebuild();fit();draw();renderTree();renderInspector()};
+  d.appendChild(btn('Fit to contents',()=>fitGrid(tplNames)));
+  d.insertAdjacentHTML('beforeend','<p class="note">Checks every layout (vertical and horizontal) and gives back any held-back strip that none of that layout\'s pieces uses any more, for example after removing the spellbook buttons. The game then shrinks the window to the remaining cells by itself. Preview the other layout with the column picker to check it.</p>');
+  box.appendChild(d);
+}
+/* for each layout template: which side holds space back, and does any piece meant for that layout still show something there? */
+function fitGrid(tplNames){
+  const root=S.tree,lw=S.designLW;if(!root||!lw) return;const t=lw.ts;const changes=[];
+  const others=kids(root.el,'Pieces').map(p=>p.textContent.trim()).map(n=>item(n,'@piece')).filter(e=>e&&!/Template$/.test(e.name)&&e.name!==t.box);
+  const sN=S.nodes,sM=S.nodeByEl;
+  try{
+    for(const tn of tplNames){const e=item(tn,'Screen');if(!e) continue;const el=e.el;
+      const orient=/NoSpinner/i.test(tn)?null:/Horizontal/i.test(tn)?'h':/Vertical/i.test(tn)?'v':null;
+      // lay the window out the way this template would be used, so the strip is where the game puts it
+      const q=snapTo(t,0,0,'w',{...lw.so,cols:orient==='h'?Math.max(2,Math.ceil(t.n/2)):1});
+      const pc0={x:0,y:0,w:q.w,h:q.h};S.nodes=[];S.nodeByEl=new Map();const rt=build(root.entry,pc0,0,null,pc0);const pc=rt.client;
+      const ins={l:N(el,'LeftAnchorOffset'),r:N(el,'RightAnchorOffset'),t:N(el,'TopAnchorOffset'),b:N(el,'BottomAnchorOffset')};
+      const strips={t:{x:pc.x,y:pc.y,w:pc.w,h:ins.t},b:{x:pc.x,y:pc.y+pc.h-ins.b,w:pc.w,h:ins.b},l:{x:pc.x,y:pc.y,w:ins.l,h:pc.h},r:{x:pc.x+pc.w-ins.r,y:pc.y,w:ins.r,h:pc.h}};
+      const key={t:'TopAnchorOffset',b:'BottomAnchorOffset',l:'LeftAnchorOffset',r:'RightAnchorOffset'};
+      const mine=others.filter(o=>orient==='h'?!/Vertical/i.test(o.name):orient==='v'?!/Horizontal/i.test(o.name):true);
+      const nodes=mine.map(o=>rt.kids.find(k=>k.entry===o)).filter(Boolean).filter(hasVisible);
+      for(const k of ['t','b','l','r']){const rest=['t','b','l','r'].filter(x=>x!==k).map(x=>ins[x]),minv=Math.max(...rest);
+        if(ins[k]<=minv+2) continue;const st=strips[k];
+        const used=nodes.some(n=>n.r.x<st.x+st.w&&n.r.x+n.r.w>st.x&&n.r.y<st.y+st.h&&n.r.y+n.r.h>st.y);
+        if(!used) changes.push([el,key[k],minv,tn,ins[k]])}
+    }
+  }finally{S.nodes=sN;S.nodeByEl=sM}
+  if(!changes.length){msg('Nothing to give back: every held-back strip still has a visible piece in it.');return}
+  edit([...new Set(changes.map(c=>c[0]))],()=>{for(const [el,k,v] of changes) setPath(el,[k],v)},'Fit to contents: '+changes.map(c=>`${c[3]} ${c[1]} ${c[4]}→${c[2]}`).join(', '));
+}
+function hasVisible(n){if(n.hidden) return false;const t=n.type;if(/Template$/.test(n.entry.name)) return false;
+  if(t==='Screen'||t==='Page'||/LayoutBox$/.test(t)){if(n.wdt&&(B(n.el,'Style_Border')||!B(n.el,'Style_Transparent'))&&getS(n.el,'DrawTemplate')) return true;return n.kids.some(hasVisible)}
+  return true}
+const inOrientation=(n,tn)=>!(/Horizontal/i.test(n.entry.name)&&/Vertical/i.test(tn))&&!(/Vertical/i.test(n.entry.name)&&/Horizontal/i.test(tn));
+/* ================= SCREEN LAYOUT (UI_*.ini loadout files) ================= */
+const L={files:[],cur:null,W:2194,H:1234,sel:null,undo:[],redo:[],eye:new Map(),demand:false,hidden:false,labels:true,art:true,bg:null,bgA:.5,guides:[],last:[],vis:[]};
+S.app='layout';S.overlay=null;S.variants=new Map();
+const views={layout:{z:.5,px:30,py:60},design:S.view};S.view=views.layout;
+function parseIni(name,bytes){
+  const d=decode(bytes);const eol=/\r\n/.test(d.text)?'\r\n':'\n';
+  const f={name,bytes,enc:d.enc,bom:d.bom,eol,orig:d.text,lines:d.text.split(/\r?\n/)};indexIni(f);return f;
+}
+function indexIni(f){
+  f.secs=new Map();f.order=[];let cur=null;
+  f.lines.forEach((l,i)=>{const m=l.match(/^\s*\[(.+?)\]\s*$/);
+    if(m){cur={name:m[1],h:i,end:i,keys:new Map()};if(!f.secs.has(m[1])) f.secs.set(m[1],cur);f.order.push(cur)}
+    else if(cur){const e=l.indexOf('=');if(e>0&&!cur.keys.has(l.slice(0,e).trim())) cur.keys.set(l.slice(0,e).trim(),i);if(l.trim()) cur.end=i}});
+}
+function iget(f,sec,k){const s=f.secs.get(sec);if(!s) return null;const i=s.keys.get(k);if(i==null) return null;const l=f.lines[i];return l.slice(l.indexOf('=')+1).trim()}
+function iset(f,sec,k,v){const s=f.secs.get(sec);if(!s) return;const i=s.keys.get(k);if(i!=null){f.lines[i]=k+'='+v}else{f.lines.splice(s.end+1,0,k+'='+v);indexIni(f)}}
+function idel(f,sec,k){const s=f.secs.get(sec);const i=s&&s.keys.get(k);if(i!=null){f.lines.splice(i,1);indexIni(f)}}
+const iniText=f=>f.lines.join(f.eol);
+const fileDirty=f=>iniText(f)!==f.orig;
+const fmtP=v=>(Math.abs(v)<5e-7?0:v).toFixed(6)+'%';
+/* Position model, calibrated against an in-game screenshot of Hafa's LO1 layout (2194x1234, 175% Windows scaling):
+   XRef left/right: XPos% of the FULL screen width, from that screen edge to the same window edge (positive = inward).
+   YRef top/bottom: YPos% of the FULL screen height, from that edge to the same window edge (positive = inward).
+   XRef center:     XPos% of HALF the screen width, from screen centre to window centre (positive = right).
+   YRef center:     YPos% of HALF the screen height, from screen centre to window centre (positive = down). */
+/* KeepOnScreenOffset (e.g. -3,-3 in LasherUI) lets a window hang that far past the screen edge: the game measures
+   positions inside the screen grown by that much on every side. Checked against Hafa's screenshots to within a pixel. */
+function toPx(xr,yr,px,py,w,h,k){const ex=xr!=='center'&&k&&k.ex||0,ey=yr!=='center'&&k&&k.ey||0,W=L.W+2*ex,H=L.H+2*ey,f=px/100,g=py/100;
+  const x=(xr==='right'?W-w-f*W:xr==='center'?W/2+f*W/2-w/2:f*W)-ex;
+  const y=(yr==='bottom'?H-h-g*H:yr==='center'?H/2+g*H/2-h/2:g*H)-ey;return {x:Math.round(x),y:Math.round(y),w,h}}
+function fromPx(xr,yr,x,y,w,h,k){const ex=xr!=='center'&&k&&k.ex||0,ey=yr!=='center'&&k&&k.ey||0,W=L.W+2*ex,H=L.H+2*ey;x+=ex;y+=ey;
+  const fx=xr==='right'?(W-w-x)/W:xr==='center'?(x+w/2-W/2)/(W/2):x/W;
+  const fy=yr==='bottom'?(H-h-y)/H:yr==='center'?(y+h/2-H/2)/(H/2):y/H;
+  return {px:fx*100,py:fy*100}}
+const ALIAS=[[/^HotButtonWnd\d*$/,'HotButtonWnd'],[/^(BagInv|BagBank)\d+$/,'ContainerWindow'],[/^ItemDisplay\d+$/,'ItemDisplayWindow'],[/^(MainChat|Chat \d+)$/,'ChatContainerWindow'],[/^AchievementDisplay\d+$/,'AchievementWnd']];
+function screenFor(name){
+  let base=name,n=null;const m=name.match(/^(.*?)_(\d+)$/);if(m){base=m[1];n=m[2]}
+  if(!(S.items.size&&item(base,'Screen'))) for(const [re,a] of ALIAS) if(re.test(base)){base=a;break}
+  if(n&&n!=='99'){const v=variant(base,n);if(v&&v.entry) return v;if(v===undefined) return null}
+  let e=S.items.size?item(base,'Screen'):null;if(!e&&base==='ChatContainerWindow') e=item('ChatWindow','Screen');return e?{entry:e,overlay:null,base}:null;
+}
+function variant(base,n){ // EQUI_<Base><N>.xml holds an alternate design of the same window
+  const key=base+'|'+n;if(S.variants.has(key)) return S.variants.get(key);
+  if(!S.files.size) return null;
+  const fname=`EQUI_${base}${n}.xml`;if(!fileFor(fname)){S.variants.set(key,null);return null}
+  S.variants.set(key,undefined);
+  loadDoc(fname).then(doc=>{
+    if(!doc||doc.err){S.variants.set(key,null);schedule();return}
+    const ov=new Map();for(const el of doc.origEls){const nm=el.getAttribute('item');if(!nm) continue;const k=low(nm);if(!ov.has(k)) ov.set(k,[]);ov.get(k).push({name:nm,type:el.tagName,el,doc})}
+    const arr=ov.get(low(base))||[];const entry=arr.filter(x=>x.type==='Screen').pop();
+    S.variants.set(key,{entry,overlay:ov,base,doc,file:fname});schedule();renderLList();renderLProps();if(S.app==='design') renderInspector();
+  });
+  return undefined;
+}
+/* In-game sizes the game snaps to (content-sized windows like the spell gem bar), measured from screenshots.
+   Keyed by skin|window|savedWxH, so they only apply while the saved size is unchanged. Users can add their own. */
+const SEED_SIZES={};
+let userSizes={};try{userSizes=JSON.parse(localStorage.getItem('eqwb-sizes')||'{}')}catch(e){}
+const saveSizes=()=>{try{localStorage.setItem('eqwb-sizes',JSON.stringify(userSizes))}catch(e){}};
+const skinName=()=>(L.cur&&iget(L.cur,'Main','UISkin'))||S.skin;
+function famOf(name){const m=name.match(/^(.+)_(\d+)$/);return m&&m[2]!=='99'?{base:m[1],n:+m[2]}:{base:name,n:0}}
+/* --- content snapping: windows whose skin puts their pieces in a TileLayoutBox with SnapToChildren
+   (spell gem bar, hotbars) can only be whole numbers of cells; the game snaps the window to fit them --- */
+let snapCache=new WeakMap();
+function tileSnap(sc){
+  if(!sc||!sc.entry) return null;const el=sc.entry.el;if(snapCache.has(el)) return snapCache.get(el);
+  const sv=S.overlay;S.overlay=sc.overlay;let info=null;
+  try{
+    const pieces=kids(el,'Pieces').map(p=>p.textContent.trim()).map(n=>({n,e:item(n,'@piece')})).filter(x=>x.e);
+    const tb=pieces.map(x=>x.e).find(e=>/TileLayoutBox$/.test(e.type)&&B(e.el,'SnapToChildren'));
+    if(tb){
+      const cells=kids(tb.el,'Pieces').map(p=>item(p.textContent.trim(),'@piece')).filter(Boolean);
+      const first=cells[0],cz=first&&Z(first.el,'Size');
+      if(cz&&cz.w>0&&cz.h>0&&cells.length>=4){ // fewer cells: the game adds them at runtime (stance bar), so the count is unknown
+        const ins=e=>({l:B(e.el,'LeftAnchorToLeft')?N(e.el,'LeftAnchorOffset'):0,r:B(e.el,'RightAnchorToLeft')?0:N(e.el,'RightAnchorOffset'),t:B(e.el,'TopAnchorToTop')?N(e.el,'TopAnchorOffset'):0,b:B(e.el,'BottomAnchorToTop')?0:N(e.el,'BottomAnchorOffset')});
+        const tpl=re=>{const x=pieces.find(p=>re.test(p.e.name)&&/Template$/.test(p.e.name)&&B(p.e.el,'AutoStretch'));return x?ins(x.e):null};
+        const own=ins(tb);const vt=tpl(/^(?!.*NoSpinner).*Vertical/i)||own,ht=tpl(/^(?!.*NoSpinner).*Horizontal/i)||own,nt=tpl(/NoSpinner/i);
+        const wdt=wdtOf(el,'Screen');const bd=B(el,'Style_Border')&&wdt?frameDims(kid(wdt,'Border')):{l:0,r:0,t:0,b:0};
+        info={cw:cz.w,ch:cz.h,n:cells.length,sp:N(tb.el,'Spacing',5),ssp:N(tb.el,'SecondarySpacing',5),hf:B(tb.el,'HorizontalFirst'),vt,ht,nt,bd,box:tb.name};
+      }
+    }
+  }finally{S.overlay=sv}
+  snapCache.set(el,info);return info;
+}
+/* size the game would give the window: 'w' = width picks the columns (default for HorizontalFirst), 'h' = height picks the rows */
+function snapTo(t0,w,h,drive,o={}){
+  const k=(o.pct>0?o.pct:100)/100,t={...t0,cw:Math.round(t0.cw*k),ch:Math.round(t0.ch*k)};if(o.noSpin&&t0.nt){t.vt=t0.nt;t.ht=t0.nt}
+  const fit=(avail,cell,gap)=>Math.max(1,Math.floor((avail+gap)/(cell+gap)));
+  const calc=(cols,ins)=>{cols=Math.max(1,Math.min(t.n,cols));const rows=Math.ceil(t.n/cols);
+    return {cols,rows,w:cols*t.cw+(cols-1)*t.sp+ins.l+ins.r+t.bd.l+t.bd.r,h:rows*t.ch+(rows-1)*t.ssp+ins.t+ins.b+t.bd.t+t.bd.b}};
+  const pick=ins=>{if(drive==='h'){const rows=fit(h-ins.t-ins.b-t.bd.t-t.bd.b,t.ch,t.ssp);return calc(Math.ceil(t.n/Math.max(1,Math.min(t.n,rows))),ins)}
+    return calc(fit(w-ins.l-ins.r-t.bd.l-t.bd.r,t.cw,t.sp),ins)};
+  if(o.cols){const c=Math.max(1,Math.min(t.n,o.cols));const r=calc(c,c>1?t.ht:t.vt);r.horiz=c>1;return r}
+  let r=pick(t.vt);if(r.cols>1){const h=pick(t.ht);if(h.cols>1) r=h}r.horiz=r.cols>1;return r;
+}
+function winInfo(f,s){
+  const g=k=>iget(f,s.name,k);
+  const xr=low(g('XRef')||'left'),yr=low(g('YRef')||'top');const px=parseFloat(g('XPos'))||0,py=parseFloat(g('YPos'))||0;
+  const sw=parseInt(g('Width'),10),sh=parseInt(g('Height'),10),stored=sw>0&&sh>0;
+  const sc=screenFor(s.name),el=sc&&sc.entry&&sc.entry.el;
+  const kos=el&&B(el,'KeepOnScreen')?P(el,'KeepOnScreenOffset'):null,ko={ex:kos?Math.max(0,-kos.x):0,ey:kos?Math.max(0,-kos.y):0};
+  let w,h,src,lim={mnW:0,mxW:0,mnH:0,mxH:0},sizable=stored,why='';
+  if(el){const z=Z(el,'Size')||{w:0,h:0};sizable=stored; // a saved size always wins (chat windows are flagged non-sizable in XML yet keep their saved size); skin min/max still clamp it
+    lim={mnW:N(el,'MinHSize'),mxW:N(el,'MaxHSize'),mnH:N(el,'MinVSize'),mxH:N(el,'MaxVSize')};
+    if(!sizable||!stored){w=z.w||sw||160;h=z.h||sh||90;src='skin';if(stored&&!sizable) why='This window can\'t be resized in your skin, so the game uses the skin\'s size.'}
+    else{w=sw;h=sh;src='ini';
+      if(lim.mnW) w=Math.max(w,lim.mnW);if(lim.mxW) w=Math.min(w,lim.mxW);if(lim.mnH) h=Math.max(h,lim.mnH);if(lim.mxH) h=Math.min(h,lim.mxH);
+      if(w!==sw||h!==sh) why='The skin limits this window\'s size, so the game clamps the saved size.'}}
+  else if(stored){w=sw;h=sh;src='ini'}else{w=160;h=90;src='guess'}
+  const ts=el&&stored?tileSnap(sc):null;
+  const so={noSpin:g('ShowSpinner')==='0',pct:parseInt(g('PercentSize'),10)};
+  if(ts){const q=snapTo(ts,w,h,'w',so);if(Math.abs(q.w-w)>2||Math.abs(q.h-h)>2){w=q.w;h=q.h;src='snap';why=`The skin lays this window out as a grid of ${ts.n} cells (${ts.cw}×${ts.ch}), so the game snaps it to whole cells: ${q.cols} column${q.cols>1?'s':''} × ${q.rows} row${q.rows>1?'s':''}.`}}
+  const key=skinName()+'|'+s.name+'|'+sw+'x'+sh;const ms=ts?null:(userSizes[key]||SEED_SIZES[key]);
+  if(ms&&stored){w=ms.w;h=ms.h;src='measured';why='This window snaps to its contents in game, so the size shown was '+(ms.note||'entered by you')+'.'}
+  // the game places the window using its saved size, then snaps to the real size, keeping the anchored edge
+  const bw=stored?sw:w,bh=stored?sh:h,r0=toPx(xr,yr,px,py,bw,bh,ko);
+  const r={x:xr==='right'?r0.x+bw-w:r0.x,y:yr==='bottom'?r0.y+bh-h:r0.y,w,h};
+  const ghost=(bw!==w||bh!==h)?r0:null;
+  const sv=g('Show');const state=sv==null?'demand':sv==='1'?'shown':'hidden';
+  const off=r.x<-ko.ex||r.y<-ko.ey||r.x+r.w>L.W+ko.ex||r.y+r.h>L.H+ko.ey;const fm=famOf(s.name); // the skin's KeepOnScreenOffset overhang is allowed
+  return {name:s.name,xr,yr,px,py,w,h,sw,sh,stored,src,state,r,r0,ghost,why,lim,resizable:stored&&sizable,off,key,fam:fm.base,dtype:fm.n,ts,so,ko};
+}
+function windows(){const f=L.cur;if(!f) return [];
+  const ws=f.order.filter(s=>s.keys.has('XPos')||s.keys.has('XRef')).map(s=>winInfo(f,s));
+  const fams=new Map();for(const w of ws){if(!fams.has(w.fam)) fams.set(w.fam,[]);fams.get(w.fam).push(w)}
+  for(const [b,m] of fams){if(m.length<2||!m.some(x=>x.dtype)){for(const x of m){x.members=[x];x.rep=true;x.fam=x.name}continue}
+    const rep=m.find(x=>x.state==='shown')||m.find(x=>x.name===b)||m[0];for(const x of m){x.members=m;x.rep=x===rep}}
+  return ws}
+function shownByDefault(w){return w.state==='shown'||/^(MainChat|Chat 1)$/.test(w.name)||(w.state==='demand'&&L.demand)||(w.state==='hidden'&&L.hidden)}
+function isVis(w){if(!w.rep) return false;const o=L.eye.get(w.fam);return o===undefined?shownByDefault(w):o}
+const winBy=name=>windows().find(w=>w.name===name);
+function drawLayoutWin(wi){
+  if(!L.art||!S.items.size) return false;const sc=screenFor(wi.name);if(!sc||!sc.entry) return false;
+  const sN=S.nodes,sM=S.nodeByEl;S.nodes=[];S.nodeByEl=new Map();S.overlay=sc.overlay;
+  try{const R={x:wi.r.x,y:wi.r.y,w:wi.w,h:wi.h};const t=build(sc.entry,R,0,null,R);if(wi.ts) arrangeGrid(t,wi);ctx.save();ctx.beginPath();ctx.rect(R.x,R.y,R.w,R.h);ctx.clip();drawNode(t);ctx.restore()}
+  catch(e){return false}finally{S.nodes=sN;S.nodeByEl=sM;S.overlay=null}
+  return true;
+}
+function arrangeGrid(t,wi){
+  const ts=wi.ts,q=snapTo(ts,wi.w,wi.h,'w',wi.so),horiz=q.horiz;
+  const ins=wi.so.noSpin&&ts.nt?ts.nt:horiz?ts.ht:ts.vt;
+  const i=t.kids.findIndex(k=>k.entry.name===ts.box);
+  if(i>=0){const k=t.kids[i],pc=k.pc;const rr={x:pc.x+ins.l,y:pc.y+ins.t,w:pc.w-ins.l-ins.r,h:pc.h-ins.t-ins.b};
+    const pct=(wi.so.pct>0?wi.so.pct:100)/100;
+    t.kids[i]=build(k.entry,pc,k.depth,t,rr);
+    if(pct!==1) for(const c of t.kids[i].kids){c.r={...c.r,w:Math.round(c.r.w*pct),h:Math.round(c.r.h*pct)}}}
+  // pieces the game doesn't show right now stay in the structure (so they can be edited) but aren't drawn or clickable
+  const flag=(k,why)=>{const m=n=>{n.offOrient=why;for(const c of n.kids) m(c)};m(k)};
+  for(const k of t.kids){const n=k.entry.name;if(n===ts.box) continue;
+    if(/Template$/.test(n)) flag(k,'layout template');
+    else if(/PageButtons|Spinner/i.test(n)&&wi.so.noSpin) flag(k,'hidden: spinner off');
+    else if(/Horizontal/i.test(n)&&!horiz) flag(k,'horizontal layout only');
+    else if(/Vertical/i.test(n)&&horiz) flag(k,'vertical layout only')}
+}
+function drawLayout(){
+  const z=S.view.z,W=L.W,H=L.H;
+  ctx.fillStyle='#1c222b';ctx.fillRect(0,0,W,H);
+  if(L.bg){ctx.globalAlpha=L.bgA;ctx.drawImage(L.bg,0,0,W,H);ctx.globalAlpha=1}
+  ctx.lineWidth=1/z;ctx.strokeStyle='rgba(255,255,255,.07)';ctx.beginPath();
+  for(const fx of [1/3,1/2,2/3]){ctx.moveTo(W*fx,0);ctx.lineTo(W*fx,H);ctx.moveTo(0,H*fx);ctx.lineTo(W,H*fx)}ctx.stroke();
+  if(!L.cur){return}
+  const ws=windows();L.last=ws;let vis=ws.filter(w=>isVis(w)||w.name===L.sel);
+  {const sf=L.sel&&ws.find(w=>w.name===L.sel);if(sf&&!sf.rep) vis=vis.filter(w=>w.fam!==sf.fam||w===sf)}
+  const si=vis.findIndex(w=>w.name===L.sel);if(si>=0) vis.push(vis.splice(si,1)[0]);L.vis=vis;
+  for(const w of vis){
+    ctx.save();
+    const a=parseInt(iget(L.cur,w.name,'Alpha'),10);ctx.globalAlpha=(w.state==='shown'?1:.7)*(isNaN(a)?1:Math.max(.25,a/255));
+    const q0=L.art?null:visInset(w),vr=q0?{x:w.r.x+q0.l,y:w.r.y+q0.t,w:w.r.w-q0.l-q0.r,h:w.r.h-q0.t-q0.b}:w.r;w.vr=vr;
+    if(!L.art||!drawLayoutWin(w)){ctx.fillStyle='rgba(44,52,66,.88)';ctx.fillRect(vr.x,vr.y,vr.w,vr.h)} // art off: only the visible panel
+    ctx.restore();
+    if(w.ghost&&w.name===L.sel){ctx.setLineDash([3/z,3/z]);ctx.lineWidth=1/z;ctx.strokeStyle='rgba(241,198,107,.6)';ctx.strokeRect(w.ghost.x,w.ghost.y,w.ghost.w,w.ghost.h);ctx.setLineDash([])}
+    ctx.setLineDash(w.state==='shown'?[]:[6/z,4/z]);ctx.lineWidth=1.25/z;
+    ctx.strokeStyle=w.off?'#e5675b':w.state==='shown'?'rgba(255,255,255,.55)':w.state==='demand'?'rgba(76,195,181,.8)':'rgba(160,160,170,.6)';
+    {const o=L.art?w.r:w.vr;ctx.strokeRect(o.x,o.y,o.w,o.h)}ctx.setLineDash([]);
+    if(L.labels){const fs=11/z;ctx.font=`600 ${fs}px Inter, sans-serif`;const t=(w.members&&w.members.length>1?w.fam+' · '+(w.dtype?'type '+w.dtype:'base'):w.name)+(w.src==='guess'?' (size?)':'')+(isLocked(w.name)?' · locked':'')+(groupOf(w.name)?' · grouped':'')+(L.ed.links[w.name]?' · attached':'');const tw=ctx.measureText(t).width;
+      const lo=L.art?w.r:w.vr;ctx.fillStyle='rgba(10,12,16,.78)';ctx.fillRect(lo.x,lo.y,tw+8/z,fs+6/z);ctx.fillStyle=w.state==='shown'?'#f1e9d6':'#9fd9d1';ctx.textBaseline='top';ctx.fillText(t,lo.x+4/z,lo.y+3/z)}
+  }
+  ctx.lineWidth=2/z;ctx.strokeStyle='#d6a849';ctx.strokeRect(0,0,W,H);
+  const sel=L.sel&&ws.find(w=>w.name===L.sel);
+  if(sel){const r=sel.r;
+    const rx=sel.xr==='left'?0:sel.xr==='right'?W:W/2,ry=sel.yr==='top'?0:sel.yr==='bottom'?H:H/2;
+    const ax=sel.xr==='left'?r.x:sel.xr==='right'?r.x+r.w:r.x+r.w/2,ay=sel.yr==='top'?r.y:sel.yr==='bottom'?r.y+r.h:r.y+r.h/2;
+    ctx.strokeStyle='#4cc3b5';ctx.setLineDash([5/z,4/z]);ctx.beginPath();ctx.moveTo(rx,ry);ctx.lineTo(ax,ay);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#4cc3b5';ctx.beginPath();ctx.arc(rx,ry,5/z,0,7);ctx.fill();ctx.beginPath();ctx.arc(ax,ay,3.5/z,0,7);ctx.fill();
+    ctx.lineWidth=2/z;ctx.strokeStyle='#f1c66b';ctx.strokeRect(r.x,r.y,r.w,r.h);
+    if(L.snapEdge==='visible'){const q=visInset(sel);if(q.l||q.r||q.t||q.b){ctx.setLineDash([4/z,3/z]);ctx.lineWidth=1/z;ctx.strokeStyle='#4cc3b5';ctx.strokeRect(r.x+q.l,r.y+q.t,r.w-q.l-q.r,r.h-q.t-q.b);ctx.setLineDash([])}}
+    if(sel.resizable&&!isLocked(sel.name)&&L.multi.size<=1) for(const h of handles(r)){ctx.fillStyle='#f1c66b';ctx.fillRect(h.x-4/z,h.y-4/z,8/z,8/z)}}
+  for(const n of L.multi){if(n===L.sel) continue;const m=ws.find(w=>w.name===n);if(m){ctx.lineWidth=1.5/z;ctx.strokeStyle='rgba(241,198,107,.85)';ctx.strokeRect(m.r.x,m.r.y,m.r.w,m.r.h)}}
+  if(sel){const g=groupOf(sel.name);if(g){const rs=[...g].map(n=>ws.find(w=>w.name===n)).filter(Boolean).map(w=>w.r);const x0=Math.min(...rs.map(r=>r.x)),y0=Math.min(...rs.map(r=>r.y)),x1=Math.max(...rs.map(r=>r.x+r.w)),y1=Math.max(...rs.map(r=>r.y+r.h));
+      ctx.setLineDash([8/z,4/z]);ctx.lineWidth=1/z;ctx.strokeStyle='rgba(241,198,107,.7)';ctx.strokeRect(x0-4/z,y0-4/z,x1-x0+8/z,y1-y0+8/z);ctx.setLineDash([])}
+    const lines=[];const pp=linkTo(sel.name);if(pp) lines.push([sel.name,pp]);for(const c of Object.keys(L.ed.links)) if(linkTo(c)===sel.name) lines.push([c,sel.name]);
+    ctx.strokeStyle='#4cc3b5';ctx.lineWidth=1.5/z;ctx.setLineDash([2/z,3/z]);
+    for(const [c,q] of lines){const a=ws.find(w=>w.name===c),b=ws.find(w=>w.name===q);if(!a||!b) continue;ctx.beginPath();ctx.moveTo(a.r.x+a.r.w/2,a.r.y+a.r.h/2);ctx.lineTo(b.r.x+b.r.w/2,b.r.y+b.r.h/2);ctx.stroke()}ctx.setLineDash([])}
+  if(L.box){ctx.fillStyle='rgba(76,195,181,.10)';ctx.fillRect(L.box.x,L.box.y,L.box.w,L.box.h);ctx.setLineDash([4/z,3/z]);ctx.strokeStyle='#4cc3b5';ctx.lineWidth=1/z;ctx.strokeRect(L.box.x,L.box.y,L.box.w,L.box.h);ctx.setLineDash([])}
+  ctx.strokeStyle='#ff5fd2';ctx.lineWidth=1/z;ctx.beginPath();
+  for(const g of L.guides){if(g.x!=null){ctx.moveTo(g.x,0);ctx.lineTo(g.x,H)}else{ctx.moveTo(0,g.y);ctx.lineTo(W,g.y)}}ctx.stroke();
+}
+function lFit(){const r=cv.getBoundingClientRect();const z=Math.min((r.width-50)/L.W,(r.height-90)/L.H);S.view.z=Math.max(.1,z);S.view.px=(r.width-L.W*S.view.z)/2;S.view.py=Math.max(50,(r.height-L.H*S.view.z)/2+20);draw()}
+/* --- edits & undo --- */
+let ltxS=null;
+const lbegin=()=>{if(L.cur&&!ltxS){ltxS={f:L.cur,before:L.cur.lines.slice(),pre:new Map(windows().map(w=>[w.name,{...w.r}]))}}};
+function lcommit(label){if(!ltxS) return;if(Object.keys(L.ed.links).length) syncLinks(ltxS.pre);const t=ltxS;ltxS=null;if(t.before.join('\n')===t.f.lines.join('\n')) return;
+  L.undo.push({f:t.f,before:t.before,after:t.f.lines.slice(),label});L.redo=[];if(L.undo.length>400) L.undo.shift();lafter(label)}
+function ltx(fn,label){lbegin();fn();lcommit(label)}
+function lstep(s,dir){s.f.lines=(dir<0?s.before:s.after).slice();indexIni(s.f);if(L.cur!==s.f) setCur(s.f)}
+function lUndo(){const s=L.undo.pop();if(!s) return;lstep(s,-1);L.redo.push(s);lafter('Undid '+(s.label||'change'))}
+function lRedo(){const s=L.redo.pop();if(!s) return;lstep(s,1);L.undo.push(s);lafter('Redid '+(s.label||'change'))}
+function lafter(label){L.guides=[];draw();renderLList();renderLProps();updateButtons();if(label) msg(label)}
+function clampSize(w,nw,nh){const l=w.lim;if(l.mnW) nw=Math.max(nw,l.mnW);if(l.mxW) nw=Math.min(nw,l.mxW);if(l.mnH) nh=Math.max(nh,l.mnH);if(l.mxH) nh=Math.min(nh,l.mxH);return [Math.max(8,nw),Math.max(8,nh)]}
+function setRect(w,nr,kind){const f=L.cur;
+  if(!iget(f,w.name,'XRef')) iset(f,w.name,'XRef',w.xr);if(!iget(f,w.name,'YRef')) iset(f,w.name,'YRef',w.yr);
+  let base;
+  if(kind==='resize'&&w.resizable){let [cw,ch]=clampSize(w,nr.w,nr.h);
+    if(w.ts){const drive=(nr.h!==w.r.h&&nr.w===w.r.w)?'h':'w';const q=snapTo(w.ts,cw,ch,drive,w.so);cw=q.w;ch=q.h}
+    const x=nr.x+(nr.x!==w.r.x?nr.w-cw:0),y=nr.y+(nr.y!==w.r.y?nr.h-ch:0);base={x,y,w:cw,h:ch};
+    iset(f,w.name,'Width',String(cw));iset(f,w.name,'Height',String(ch))}
+  else{const b0=w.r0;base={x:b0.x+(nr.x-w.r.x),y:b0.y+(nr.y-w.r.y),w:b0.w,h:b0.h}}
+  const p=fromPx(w.xr,w.yr,base.x,base.y,base.w,base.h,w.ko);iset(f,w.name,'XPos',fmtP(p.px));iset(f,w.name,'YPos',fmtP(p.py))}
+function reanchor(w,xr,yr){const r=w.r0;const f=L.cur;iset(f,w.name,'XRef',xr);iset(f,w.name,'YRef',yr);const p=fromPx(xr,yr,r.x,r.y,r.w,r.h,w.ko);iset(f,w.name,'XPos',fmtP(p.px));iset(f,w.name,'YPos',fmtP(p.py))}
+function nearest(w){const cx=w.r.x+w.r.w/2,cy=w.r.y+w.r.h/2;return [cx<L.W/3?'left':cx>2*L.W/3?'right':'center',cy<L.H/3?'top':cy>2*L.H/3?'bottom':'center']}
+/* --- visible edges: where each window's drawn panel starts, read from the alpha of the skin's border art --- */
+const opaqCache=new Map();
+function opaqueInset(anim,side){
+  if(!anim) return null;const k=anim+'|'+side;if(opaqCache.has(k)) return opaqCache.get(k);
+  const f=frameOf(anim);if(!f||!f.tex||f.w<=0||f.h<=0) return null;const img=getTex(f.tex);if(!img) return null;
+  const sc=texScale(f.tex,img),sx=Math.round(f.x*sc.sx),sy=Math.round(f.y*sc.sy),sw=Math.max(1,Math.round(f.w*sc.sx)),sh=Math.max(1,Math.round(f.h*sc.sy));
+  let d;try{d=img.getContext('2d').getImageData(sx,sy,sw,sh).data}catch(e){return null}
+  const a=(x,y)=>d[(y*sw+x)*4+3];let v=null;
+  if(side==='l'||side==='r'){for(let i=0;i<sw;i++){const x=side==='l'?i:sw-1-i;let t=0;for(let y=0;y<sh;y++) t+=a(x,y);if(t/sh>200){v=i/sc.sx;break}}if(v==null) v=f.w}
+  else{for(let i=0;i<sh;i++){const y=side==='t'?i:sh-1-i;let t=0;for(let x=0;x<sw;x++) t+=a(x,y);if(t/sw>200){v=i/sc.sy;break}}if(v==null) v=f.h}
+  v=Math.round(v);opaqCache.set(k,v);return v;
+}
+/* Visible edge from the skin itself: draw the window alone into a hidden canvas exactly as the canvas shows it,
+   then find, on each side, the first line that is mostly solid (alpha >= 200). Semi-transparent borders don't count. */
+const rCache=new Map();
+function renderedInset(w){
+  if(!w||!w.r||!S.items.size) return null;const key=skinName()+'|'+w.name+'|'+w.w+'x'+w.h;if(rCache.has(key)) return rCache.get(key);
+  const W=Math.max(1,Math.round(w.w)),H=Math.max(1,Math.round(w.h));const off=document.createElement('canvas');off.width=W;off.height=H;
+  const save=ctx,art=L.art;ctx=off.getContext('2d');ctx.setTransform(1,0,0,1,-w.r.x,-w.r.y);L.art=true;S.texPending=false;let ok=false;
+  try{ok=drawLayoutWin(w)}finally{ctx=save;L.art=art}
+  if(!ok||S.texPending) return null; // try again once the textures have loaded
+  const d=off.getContext('2d').getImageData(0,0,W,H).data,A=(x,y)=>d[(y*W+x)*4+3];
+  const scan=side=>{const vert=side==='l'||side==='r',len=vert?H:W,depth=Math.min(30,vert?W>>1:H>>1),a0=Math.floor(len*.2),a1=Math.ceil(len*.8);
+    for(let i=0;i<depth;i++){let n=0,t=0;for(let j=a0;j<a1;j++){t++;const x=side==='l'?i:side==='r'?W-1-i:j,y=side==='t'?i:side==='b'?H-1-i:j;if(A(x,y)>=200) n++}
+      if(t&&n/t>=.5) return i}return null};
+  const out={l:scan('l'),r:scan('r'),t:scan('t'),b:scan('b')};
+  if(out.l==null&&out.r==null&&out.t==null&&out.b==null) {rCache.set(key,null);return null}
+  rCache.set(key,out);return out;
+}
+function renderInsetDebug(w,off){const save=ctx;ctx=off.getContext('2d');ctx.setTransform(1,0,0,1,-w.r.x,-w.r.y);let ok;try{ok=drawLayoutWin(w)}finally{ctx=save}return ok}
+function isTransparentWin(w){const sc=screenFor(w.name);return !!(sc&&sc.entry&&B(sc.entry.el,'Style_Transparent'))}
+function visInset(w){const a=visInsetArt(w),r=(w&&w.name&&isTransparentWin(w)&&renderedInset(w))||{}, // see-through windows: the visible edge is whatever is drawn inside them // the border art alone matched Hafa's screenshots best (child pieces can reach the edge in the editor's drawing)
+  _u=0,c=w&&w.name?visCal[skinName()+'|'+w.name]:null||{};const cc=c||{};
+  const pick=k=>cc[k]??r[k]??a[k];return {l:pick('l'),r:pick('r'),t:pick('t'),b:pick('b'),src:Object.keys(cc).length?'screenshot':Object.keys(r).length?'contents':'skin'}}
+function visInsetArt(w){
+  const z={l:0,r:0,t:0,b:0};const sc=screenFor(w.name);if(!sc||!sc.entry) return z;
+  const sv=S.overlay;S.overlay=sc.overlay;
+  try{const el=sc.entry.el,wdt=wdtOf(el,'Screen');if(!wdt) return z;
+    const bd=B(el,'Style_Border')?kid(wdt,'Border'):null,tb=B(el,'Style_Titlebar')?kid(wdt,'Titlebar'):null;
+    const dims=bd?frameDims(bd):z,pick=(ft,names)=>{for(const n of names){const a=getS(ft,n);if(a) return a}return null};
+    const side=(ft,names,s2,fb)=>{if(!ft) return 0;const v=opaqueInset(pick(ft,names),s2);return v==null?fb:Math.min(v,fb||v)};
+    return {l:side(bd,['Left','LeftTop'],'l',dims.l),r:side(bd,['Right','RightTop'],'r',dims.r),
+      t:tb?side(tb,['Top','Middle','TopLeft'],'t',0):side(bd,['Top','TopLeft'],'t',dims.t),b:side(bd,['Bottom','BottomLeft'],'b',dims.b)};
+  }finally{S.overlay=sv}
+}
+L.snapEdge='outer';
+/* --- visible edges measured from an in-game screenshot (the skin's dark outline), remembered per skin + window --- */
+let visCal={};try{visCal=JSON.parse(localStorage.getItem('eqwb-viscal2')||'{}');localStorage.removeItem('eqwb-viscal')}catch(e){} // v1 measurements predate the KeepOnScreenOffset fix
+const saveCal=()=>{try{localStorage.setItem('eqwb-viscal2',JSON.stringify(visCal))}catch(e){}};
+const calKey=w=>skinName()+'|'+w.name;
+function bgPixels(){if(L.bgData) return L.bgData;const c=document.createElement('canvas');c.width=L.bg.width;c.height=L.bg.height;const x=c.getContext('2d');x.drawImage(L.bg,0,0);L.bgData={w:c.width,h:c.height,d:x.getImageData(0,0,c.width,c.height).data};return L.bgData}
+function measureWin(w){
+  const b=bgPixels(),sx=b.w/L.W,sy=b.h/L.H,r=w.r,out={};
+  const lum=(X,Y)=>{const i=(Math.min(b.h-1,Math.round(Y*sy))*b.w+Math.min(b.w-1,Math.round(X*sx)))*4;return b.d[i]*.3+b.d[i+1]*.59+b.d[i+2]*.11};
+  for(const side of ['l','r','t','b']){
+    const atScreen=side==='l'?r.x<=0:side==='r'?r.x+r.w>=L.W:side==='t'?r.y<=0:r.y+r.h>=L.H;if(atScreen) continue;
+    const hits=[];
+    for(let k=1;k<=9;k++){const f=k/10;
+      for(let o=0.5;o<=18;o+=0.5){const X=side==='l'?r.x+o:side==='r'?r.x+r.w-o:r.x+r.w*f,Y=side==='t'?r.y+o:side==='b'?r.y+r.h-o:r.y+r.h*f;
+        if(X<0||Y<0||X>=L.W||Y>=L.H) break;if(lum(X,Y)<=6){hits.push(o-0.5);break}}}
+    if(hits.length>=5){hits.sort((p,q)=>p-q);out[side]=Math.round(hits[hits.length>>1])}
+  }
+  return out;
+}
+$('#bMeasure').onclick=()=>{if(!L.bg||!L.cur) return;
+  const done=[];for(const w of L.vis){const m=measureWin(w);if(Object.keys(m).length){visCal[calKey(w)]={...(visCal[calKey(w)]||{}),...m};done.push(`${w.fam||w.name} ${Object.entries(m).map(([k,v])=>({l:'left',r:'right',t:'top',b:'bottom'}[k])+' '+v).join(', ')}`)}}
+  saveCal();$('#sSnapEdge').value='visible';L.snapEdge='visible';draw();renderLProps();
+  msg(done.length?`Measured visible edges for ${done.length} windows and switched to visible-edge snapping. ${done.slice(0,4).join(' · ')}${done.length>4?' …':''}`:'No window outlines found. Is this screenshot of the same layout file and screen size?')};
+$('#sSnapEdge').onchange=()=>{L.snapEdge=$('#sSnapEdge').value;draw();msg(L.snapEdge==='visible'?'Snapping visible panels together: windows overlap by their see-through border so the panels look flush in game.':'Snapping outer window edges, as stored in the file.')};
+/* --- snapping --- */
+let altDown=false;
+function snapRect(nr,self,edges,skip,extras){
+  L.guides=[];if(!S.snap||altDown) return nr;
+  const vis=L.snapEdge==='visible',zi={l:0,r:0,t:0,b:0};
+  const me=vis?visInset(winBy(self)||{name:self}):zi;
+  const t=7/S.view.z,xs=[],ys=[];
+  for(const o of L.vis){if(o.name===self||(skip&&skip.has(o.name))) continue;const q=vis?visInset(o):zi;const ox=o.r.x+q.l,ow=o.r.w-q.l-q.r,oy=o.r.y+q.t,oh=o.r.h-q.t-q.b;
+    xs.push([ox,0],[ox+ow,0],[ox+ow/2,0]);ys.push([oy,0],[oy+oh,0],[oy+oh/2,0])}
+  // screen edges always meet the outer edge; centre lines meet the visible centre
+  const best=(vals,cands)=>{let bb=null;for(const [k,v] of vals) for(const [c] of cands){const d=c-v;if(Math.abs(d)<=t&&(!bb||Math.abs(d)<Math.abs(bb.d))) bb={k,d,c}}return bb};
+  const r={...nr};
+  // each value: [name, coordinate, kind] kind 0 = visible edge (windows only), 1 = outer edge (screen only), 2 = visible centre
+  // extras: the other windows moving with this one, as offsets from it; any of their edges may snap the whole block
+  const ex=(extras||[]).map(e=>({...e,q:vis?visInset(e.w):zi}));
+  const X=()=>[['l',r.x+me.l,0],['r',r.x+r.w-me.r,0],['c',r.x+me.l+(r.w-me.l-me.r)/2,2],['L',r.x,1],['R',r.x+r.w,1],
+    ...ex.flatMap(e=>{const x=r.x+e.dx;return [['l',x+e.q.l,0],['r',x+e.w.r.w-e.q.r,0],['L',x,1],['R',x+e.w.r.w,1]]})];
+  const Y=()=>[['t',r.y+me.t,0],['b',r.y+r.h-me.b,0],['m',r.y+me.t+(r.h-me.t-me.b)/2,2],['T',r.y,1],['B',r.y+r.h,1],
+    ...ex.flatMap(e=>{const y=r.y+e.dy;return [['t',y+e.q.t,0],['b',y+e.w.r.h-e.q.b,0],['T',y,1],['B',y+e.w.r.h,1]]})];
+  // window panels meet window panels (edges and centres); outer edges meet the screen edges; visible centre meets the screen centre
+  const pick=(vals,others,edgesS,mid)=>[best(vals.filter(v=>v[2]!==1),others),best(vals.filter(v=>v[2]===1),edgesS),best(vals.filter(v=>v[2]===2),mid)].filter(Boolean).sort((p,q)=>Math.abs(p.d)-Math.abs(q.d))[0];
+  const ko=(winBy(self)||{}).ko||{ex:0,ey:0};
+  const pickX=f=>pick(X().filter(v=>f(v[0])),xs,[[-ko.ex],[L.W+ko.ex]],[[L.W/2]]);
+  const pickY=f=>pick(Y().filter(v=>f(v[0])),ys,[[-ko.ey],[L.H+ko.ey]],[[L.H/2]]);
+  if(edges==='move'){
+    const bx=pickX(()=>true);if(bx){r.x+=bx.d;L.guides.push({x:bx.c})}
+    const by=pickY(()=>true);if(by){r.y+=by.d;L.guides.push({y:by.c})}
+  }else{
+    if(edges.includes('e')){const b=pickX(k=>k==='r'||k==='R');if(b){r.w+=b.d;L.guides.push({x:b.c})}}
+    if(edges.includes('w')){const b=pickX(k=>k==='l'||k==='L');if(b){r.x+=b.d;r.w-=b.d;L.guides.push({x:b.c})}}
+    if(edges.includes('s')){const b=pickY(k=>k==='b'||k==='B');if(b){r.h+=b.d;L.guides.push({y:b.c})}}
+    if(edges.includes('n')){const b=pickY(k=>k==='t'||k==='T');if(b){r.y+=b.d;r.h-=b.d;L.guides.push({y:b.c})}}
+  }
+  return {x:Math.round(r.x),y:Math.round(r.y),w:Math.max(8,Math.round(r.w)),h:Math.max(8,Math.round(r.h))};
+}
+/* --- pointer --- */
+let ldrag=null;
+function lDown(ev){
+  cv.setPointerCapture(ev.pointerId);const p=toW(ev);
+  if(ev.button===1||ev.button===2||space||!L.cur){ldrag={kind:'pan',sx:ev.clientX,sy:ev.clientY,px:S.view.px,py:S.view.py};return}
+  const sel=L.sel&&L.vis.find(w=>w.name===L.sel);
+  if(sel&&sel.resizable&&!isLocked(sel.name)&&L.multi.size<=1){const h=handleAt(sel.r,p);if(h){ldrag={kind:'resize',h:h.k,name:sel.name,start:{...sel.r},p0:p,moved:false};return}}
+  const hit=[...L.vis].reverse().find(w=>inR(w.r,p));
+  if(!hit){if(!ev.shiftKey){L.sel=null;L.multi.clear()}renderLList();renderLProps();draw();ldrag={kind:'box',p0:p,add:ev.shiftKey,base:new Set(L.multi)};return}
+  if(ev.shiftKey){if(L.multi.has(hit.name)&&L.multi.size>1){L.multi.delete(hit.name);if(L.sel===hit.name) L.sel=[...L.multi].pop()}else{if(L.sel&&!L.multi.size) L.multi.add(L.sel);L.multi.add(hit.name);L.sel=hit.name}
+    renderLList();renderLProps();draw();return}
+  if(!(L.multi.has(hit.name)&&L.multi.size>1)) L.multi=new Set([hit.name]);
+  L.sel=hit.name;renderLList(true);renderLProps();draw();
+  const mv=movers(L.multi),lk=[...mv].filter(isLocked);
+  if(lk.length){msg(lk.includes(hit.name)?`${hit.name} is locked. Unlock it in the window panel (or press L) to move it.`:`Can't move: ${lk.join(', ')} ${lk.length>1?'are':'is'} locked and would move with it.`);return}
+  ldrag={kind:'move',name:hit.name,start:{...hit.r},p0:p,moved:false,others:[...mv].filter(n=>n!==hit.name).map(winBy).filter(Boolean)};
+}
+function lMove(ev){
+  const p=toW(ev);$('#pos').textContent=`${Math.round(p.x)}, ${Math.round(p.y)}`;altDown=ev.altKey;
+  if(!ldrag){const hit=[...L.vis].reverse().find(w=>inR(w.r,p));const sel=L.sel&&L.vis.find(w=>w.name===L.sel);const hd=sel&&sel.resizable&&handleAt(sel.r,p);
+    cv.style.cursor=hd?({n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',ne:'nesw-resize',sw:'nesw-resize',nw:'nwse-resize',se:'nwse-resize'}[hd.k]):hit?'move':'default';return}
+  if(ldrag.kind==='pan'){S.view.px=ldrag.px+ev.clientX-ldrag.sx;S.view.py=ldrag.py+ev.clientY-ldrag.sy;draw();return}
+  if(ldrag.kind==='box'){const a=ldrag.p0;L.box={x:Math.min(a.x,p.x),y:Math.min(a.y,p.y),w:Math.abs(p.x-a.x),h:Math.abs(p.y-a.y)};
+    const hitB=L.vis.filter(w=>w.r.x<L.box.x+L.box.w&&w.r.x+w.r.w>L.box.x&&w.r.y<L.box.y+L.box.h&&w.r.y+w.r.h>L.box.y).map(w=>w.name);
+    L.multi=new Set([...(ldrag.add?ldrag.base:[]),...hitB]);L.sel=hitB.length?hitB[hitB.length-1]:(L.multi.size?[...L.multi].pop():null);draw();msg(`${L.multi.size} selected`);return}
+  const dx=p.x-ldrag.p0.x,dy=p.y-ldrag.p0.y;
+  if(!ldrag.moved){if(Math.abs(dx)*S.view.z<3&&Math.abs(dy)*S.view.z<3) return;ldrag.moved=true;lbegin()}
+  if(!ldrag.w0) ldrag.w0=winBy(ldrag.name);const w=ldrag.w0;if(!w) return;const s=ldrag.start;let nr={...s};
+  if(ldrag.kind==='move'){nr.x=Math.round(s.x+dx);nr.y=Math.round(s.y+dy);nr=snapRect(nr,w.name,'move',new Set([w.name,...(ldrag.others||[]).map(o=>o.name)]),(ldrag.others||[]).map(o=>({w:o,dx:o.r.x-s.x,dy:o.r.y-s.y})));moveWins(ldrag.others||[],nr.x-s.x,nr.y-s.y)}
+  else{const k=ldrag.h;if(k.includes('e')) nr.w=s.w+dx;if(k.includes('s')) nr.h=s.h+dy;if(k.includes('w')){nr.x=s.x+dx;nr.w=s.w-dx}if(k.includes('n')){nr.y=s.y+dy;nr.h=s.h-dy}nr=snapRect(nr,w.name,k)}
+  setRect(w,nr,ldrag.kind);if(ldrag.kind==='resize'&&ltxS&&Object.keys(L.ed.links).length) syncLinks(ltxS.pre);draw();const w2=winBy(w.name);msg(`${w.name}: ${nr.x}, ${nr.y}  ${nr.w}×${nr.h}  ·  ${w2.xr}/${w2.yr} ${fmtP(w2.px)} ${fmtP(w2.py)}${S.snap?'  ·  hold Alt to stop snapping':''}`);
+}
+function lUp(){if(ldrag&&ldrag.kind==='box'){L.box=null;ldrag=null;if(L.multi.size===1) L.sel=[...L.multi][0];renderLList();renderLProps();draw();return}
+if(ldrag&&ldrag.moved) lcommit((ldrag.kind==='move'?'Moved ':'Resized ')+ldrag.name+(ldrag.others&&ldrag.others.length?` and ${ldrag.others.length} more`:''));else ltxS=null;ldrag=null;L.guides=[];draw()}
+function lKey(ev,mod){
+  if(mod&&ev.key.toLowerCase()==='z'){ev.preventDefault();ev.shiftKey?lRedo():lUndo();return}
+  if(mod&&ev.key.toLowerCase()==='y'){ev.preventDefault();lRedo();return}
+  if(ev.key==='f'||ev.key==='F'){lFit();return}
+  if(ev.key==='Escape'){L.sel=null;L.multi.clear();renderLList();renderLProps();draw();return}
+  if(mod&&ev.key.toLowerCase()==='a'){ev.preventDefault();L.multi=new Set(L.vis.map(w=>w.name));L.sel=[...L.multi].pop()||null;renderLList();renderLProps();draw();msg(`Selected ${L.multi.size} windows`);return}
+  const sel=L.multi.size?[...L.multi]:L.sel?[L.sel]:[];
+  if(!mod&&(ev.key==='l'||ev.key==='L')&&sel.length){const lockIt=!sel.every(isLocked);for(const n of sel) lockIt?L.ed.locked.add(n):L.ed.locked.delete(n);edChanged(`${lockIt?'Locked':'Unlocked'} ${sel.join(', ')}`);return}
+  if(!mod&&(ev.key==='g'||ev.key==='G')&&sel.length){if(ev.shiftKey) ungroupSel();else groupSel();return}
+  const arrows={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
+  if(arrows[ev.key]&&sel.length){ev.preventDefault();const mv=movers(sel),lk=[...mv].filter(isLocked);if(lk.length){msg(`${lk.join(', ')} ${lk.length>1?'are':'is'} locked.`);return}
+    const [dx,dy]=arrows[ev.key].map(v=>v*(ev.shiftKey?10:1));ltx(()=>moveWins([...mv].map(winBy),dx,dy),`Nudged ${sel.length>1?sel.length+' windows':sel[0]}`)}
+}
+/* --- editor-only organisation: locks, groups, attachments. Never written to the .ini --- */
+L.multi=new Set();L.ed={locked:new Set(),groups:[],links:{}};
+const edKey=()=>'eqwb-ed:'+(L.cur?L.cur.name.toLowerCase():'');
+function loadEd(){let o={};try{o=JSON.parse(localStorage.getItem(edKey())||'{}')}catch(e){}
+  L.ed={locked:new Set(o.locked||[]),groups:(o.groups||[]).map(g=>new Set(g)).filter(g=>g.size>1),links:o.links||{}}}
+function saveEd(){try{localStorage.setItem(edKey(),JSON.stringify({locked:[...L.ed.locked],groups:L.ed.groups.map(g=>[...g]),links:L.ed.links}))}catch(e){}}
+const groupOf=n=>L.ed.groups.find(g=>g.has(n));
+const linkTo=c=>{const l=L.ed.links[c];return l?(typeof l==='string'?l:l.to):null};
+/* edge positions of a window, using visible panels when the link was made in visible mode */
+function edgesOf(w,vis){const q=vis?visInset(w):{l:0,r:0,t:0,b:0},r=w.r;const x0=r.x+q.l,x1=r.x+r.w-q.r,y0=r.y+q.t,y1=r.y+r.h-q.b;return {l:x0,r:x1,c:(x0+x1)/2,t:y0,b:y1,m:(y0+y1)/2}}
+/* pick the edge pairing that is closest right now, e.g. child's left edge 0 px from parent's right edge */
+function relationFor(c,p,vis){const a=edgesOf(c,vis),b=edgesOf(p,vis);
+  const best=(ks)=>{let bb=null;for(const ce of ks) for(const pe of ks){const g=Math.round(a[ce]-b[pe]);if(!bb||Math.abs(g)<Math.abs(bb.gap)) bb={ce,pe,gap:g}}return bb};
+  return {h:best(['l','c','r']),v:best(['t','m','b'])}}
+function mkLink(c,p){const vis=L.snapEdge==='visible';const cw=winBy(c),pw=winBy(p);return {to:p,vis,...relationFor(cw,pw,vis)}}
+function fullLink(c){const l=L.ed.links[c];if(!l) return null;if(typeof l==='string'){const cw=winBy(c),pw=winBy(l);if(!cw||!pw) return null;L.ed.links[c]=mkLink(c,l)}return L.ed.links[c]}
+/* after an edit: children whose parent moved or changed size are put back at their set distance;
+   children that were moved on their own (and whose parent didn't move) keep the new distance */
+function syncLinks(pre){
+  const order=[],seen=new Set(),visit=c=>{if(seen.has(c)) return;seen.add(c);const p=linkTo(c);if(p&&L.ed.links[p]) visit(p);order.push(c)};
+  for(const c of Object.keys(L.ed.links)) visit(c);
+  const changed=n=>{const a=pre.get(n),w=winBy(n);return !!(a&&w&&(a.x!==w.r.x||a.y!==w.r.y||a.w!==w.r.w||a.h!==w.r.h))};
+  const movedNow=new Set([...pre.keys()].filter(changed));
+  for(const c of order){const l=fullLink(c);if(!l) continue;const cw=winBy(c),pw=winBy(l.to);if(!cw||!pw) continue;
+    if(!movedNow.has(l.to)){if(movedNow.has(c)){const r=relationFor(cw,pw,l.vis);l.h.gap=Math.round(edgesOf(cw,l.vis)[l.h.ce]-edgesOf(pw,l.vis)[l.h.pe]);l.v.gap=Math.round(edgesOf(cw,l.vis)[l.v.ce]-edgesOf(pw,l.vis)[l.v.pe]);void r}continue}
+    if(isLocked(c)) continue;
+    const a=edgesOf(cw,l.vis),b=edgesOf(pw,l.vis);const dx=Math.round(b[l.h.pe]+l.h.gap-a[l.h.ce]),dy=Math.round(b[l.v.pe]+l.v.gap-a[l.v.ce]);
+    if(dx||dy){setRect(cw,{x:cw.r.x+dx,y:cw.r.y+dy,w:cw.r.w,h:cw.r.h},'move');movedNow.add(c)}}
+  saveEd();
+}
+const isLocked=n=>L.ed.locked.has(n);
+function movers(names){ // everything that moves with these windows: their groups and, recursively, windows attached to them
+  const out=new Set(),q=[...names];
+  while(q.length){const n=q.pop();if(out.has(n)) continue;out.add(n);const g=groupOf(n);if(g) for(const m of g) q.push(m);
+    for(const c of Object.keys(L.ed.links)) if(linkTo(c)===n) q.push(c)}
+  return out}
+function edChanged(label){saveEd();renderLList();renderLProps();draw();if(label) msg(label)}
+const eRect=w=>{if(L.snapEdge!=='visible') return w.r;const q=visInset(w);return {x:w.r.x+q.l,y:w.r.y+q.t,w:w.r.w-q.l-q.r,h:w.r.h-q.t-q.b}};
+function moveWins(list,dx,dy){for(const w of list) if(w&&!isLocked(w.name)) setRect(w,{x:w.r.x+dx,y:w.r.y+dy,w:w.r.w,h:w.r.h},'move')}
+function selWins(){return [...L.multi].map(winBy).filter(Boolean)}
+function alignSel(kind){
+  const ws=selWins().filter(w=>!isLocked(w.name));if(ws.length<2){msg('Select two or more unlocked windows (Shift+click).');return}
+  const R2=ws.map(eRect),minX=Math.min(...R2.map(r=>r.x)),maxX=Math.max(...R2.map(r=>r.x+r.w)),minY=Math.min(...R2.map(r=>r.y)),maxY=Math.max(...R2.map(r=>r.y+r.h));
+  ltx(()=>{
+    if(kind==='dh'||kind==='dv'){const h=kind==='dh';const o=ws.map((w,i)=>({w,r:R2[i]})).sort((a,b)=>h?a.r.x-b.r.x:a.r.y-b.r.y);
+      const total=o.reduce((t,x)=>t+(h?x.r.w:x.r.h),0),gap=((h?maxX-minX:maxY-minY)-total)/(o.length-1);let c=h?minX:minY;
+      for(const x of o){const d=Math.round(c-(h?x.r.x:x.r.y));if(d) moveWins([...movers([x.w.name])].map(winBy),h?d:0,h?0:d);c+=(h?x.r.w:x.r.h)+gap}return}
+    ws.forEach((w,i)=>{const r=R2[i];let dx=0,dy=0;
+      if(kind==='l') dx=minX-r.x;if(kind==='r') dx=maxX-(r.x+r.w);if(kind==='ch') dx=Math.round((minX+maxX)/2-(r.x+r.w/2));
+      if(kind==='t') dy=minY-r.y;if(kind==='b') dy=maxY-(r.y+r.h);if(kind==='cv') dy=Math.round((minY+maxY)/2-(r.y+r.h/2));
+      if(dx||dy) moveWins([w],dx,dy)});
+  },'Aligned '+ws.length+' windows')}
+function matchSize(dim){const prim=winBy(L.sel);const ws=selWins().filter(w=>w!==prim&&w.resizable&&!isLocked(w.name));if(!prim||!ws.length){msg('Select the window to copy from last, plus resizable windows to change.');return}
+  ltx(()=>{for(const w of ws) setRect(w,{x:w.r.x,y:w.r.y,w:dim==='w'?prim.w:w.r.w,h:dim==='h'?prim.h:w.r.h},'resize')},`Matched ${dim==='w'?'width':'height'} of ${prim.name}`)}
+function groupSel(){const sel=[...(L.multi.size?L.multi:new Set([L.sel]))].filter(Boolean);if(sel.length<2){msg('Shift+click two or more windows, then group them.');return}
+  const g=new Set(sel);L.ed.groups=L.ed.groups.filter(x=>{if([...x].some(n=>g.has(n))){for(const n of x) g.add(n);return false}return true});L.ed.groups.push(g);edChanged(`Grouped ${[...g].join(', ')}: they now move together`)}
+function ungroupSel(){const sel=[...(L.multi.size?L.multi:new Set([L.sel]))];const before=L.ed.groups.length;L.ed.groups=L.ed.groups.filter(g=>!sel.some(n=>g.has(n)));edChanged(before!==L.ed.groups.length?'Ungrouped':'Nothing to ungroup')}
+/* --- side panels --- */
+function renderLList(scroll){
+  const box=$('#llist');if(!L.cur){box.innerHTML='<p class="note" style="padding:0 10px">No layout file open.</p>';return}
+  const q=low($('#lq').value);const ws=windows().filter(w=>w.rep&&(!q||low(w.fam).includes(q)||w.members.some(m=>low(m.name).includes(q))));
+  const groups=[['shown','Shown in game'],['demand','Opened on demand (bags, item windows…)'],['hidden','Closed']];
+  box.innerHTML=groups.map(([st,t])=>{const g=ws.filter(w=>w.state===st);if(!g.length) return '';
+    return `<div class="lg">${t} (${g.length})</div>`+g.map(w=>`<div class="lw${w.members.some(m=>m.name===L.sel||L.multi.has(m.name))?' cur':''}" data-n="${esc(w.name)}"><input type="checkbox" data-e="${esc(w.fam)}" ${isVis(w)?'checked':''} title="Show on the canvas"><span class="n">${esc(w.fam)}</span>${w.members.length>1?`<span class="badge" title="Display type in use (${w.members.length} saved)">${w.dtype?'type '+w.dtype:'base'}</span>`:''}${isLocked(w.name)?'<span class="badge" title="Locked in the editor">locked</span>':''}${groupOf(w.name)?'<span class="badge" title="Moves with its group">grp</span>':''}${L.ed.links[w.name]?`<span class="badge" title="Attached to ${esc(linkTo(w.name))}">att</span>`:''}${w.off?'<span class="badge warn" title="Partly off-screen">off</span>':''}${w.src==='guess'?'<span class="badge warn" title="No size in the file or the skin, so a placeholder size is used">size?</span>':''}${w.members.some(m=>fileDirtySec(m.name))?'<span class="d" style="color:var(--brass2)">●</span>':''}</div>`).join('')}).join('');
+  if(scroll){const c=box.querySelector('.cur');if(c) c.scrollIntoView({block:'nearest'})}
+}
+function fileDirtySec(name){const f=L.cur;if(!f||!f.origSecs) return false;const s=f.secs.get(name);if(!s) return false;const now=f.lines.slice(s.h,s.end+1).join('\n');return f.origSecs.get(name)!==now}
+$('#llist').addEventListener('click',ev=>{const cb=ev.target.closest('[data-e]');if(cb){L.eye.set(cb.dataset.e,cb.checked);draw();return}
+  const d=ev.target.closest('.lw');if(!d) return;if(ev.shiftKey){if(L.sel&&!L.multi.size) L.multi.add(L.sel);L.multi.has(d.dataset.n)&&L.multi.size>1?L.multi.delete(d.dataset.n):L.multi.add(d.dataset.n)}else L.multi=new Set([d.dataset.n]);L.sel=d.dataset.n;{const w=winBy(L.sel);if(w&&w.rep&&!isVis(w)) L.eye.set(w.fam,true)}renderLList();renderLProps();draw()});
+$('#lq').oninput=()=>renderLList();
+$('#cDemand').onchange=()=>{L.demand=$('#cDemand').checked;draw();renderLList()};
+$('#cLHid').onchange=()=>{L.hidden=$('#cLHid').checked;draw();renderLList()};
+$('#cLab').onchange=()=>{L.labels=$('#cLab').checked;draw()};
+$('#cArt').onchange=()=>{L.art=$('#cArt').checked;draw()};
+function lrow(label,inner,tip){return `<div class="row set"${tip?` title="${esc(tip)}"`:''}><label>${label}</label>${inner}<span></span></div>`}
+function renderLProps(){
+  const box=$('#lprops');const f=L.cur;
+  if(!f){box.innerHTML='<p class="note">Open a layout file to begin.</p>';return}
+  if(L.multi.size>1){const ws=selWins();const inGroup=ws.some(x=>groupOf(x.name));
+    box.innerHTML=`<div class="hd"><span class="ty">${ws.length} windows</span><div class="nm">${ws.map(x=>esc(x.fam||x.name)).join(', ')}</div><div class="meta">Shift+click to add or remove windows. Drag any of them to move them all.</div></div>
+      <details class="grp" open><summary>Organise (editor only, not saved in the .ini)</summary><div class="acts"><button id="mGroup">Group</button>${inGroup?'<button id="mUngroup">Ungroup</button>':''}<button id="mLock">${ws.every(x=>isLocked(x.name))?'Unlock all':'Lock all'}</button></div>
+      <p class="note">Grouped windows always move together, even when you select just one. Keys: G group, Shift+G ungroup, L lock.</p></details>
+      <details class="grp" open><summary>Align (${L.snapEdge==='visible'?'visible':'outer'} edges)</summary><div class="acts">${[['l','Left'],['ch','Centre'],['r','Right'],['t','Top'],['cv','Middle'],['b','Bottom']].map(([k,t])=>`<button data-al="${k}">${t}</button>`).join('')}</div>
+      <div class="acts"><button data-al="dh">Space evenly across</button><button data-al="dv">Space evenly down</button></div>
+      <div class="acts"><button id="mW">Match width</button><button id="mH">Match height</button></div><p class="note">Match copies the size of the window you clicked last (${esc(L.sel||'')}) to the other resizable windows.</p></details>`;
+    box.querySelectorAll('[data-al]').forEach(b=>b.onclick=()=>alignSel(b.dataset.al));$('#mGroup').onclick=groupSel;const ug=$('#mUngroup');if(ug) ug.onclick=ungroupSel;
+    $('#mLock').onclick=()=>{const all=ws.every(x=>isLocked(x.name));for(const x of ws) all?L.ed.locked.delete(x.name):L.ed.locked.add(x.name);edChanged(all?'Unlocked':'Locked')};
+    $('#mW').onclick=()=>matchSize('w');$('#mH').onclick=()=>matchSize('h');return}
+  const w=L.sel&&winBy(L.sel);
+  if(!w){const ws=windows();const skin=iget(f,'Main','UISkin');
+    box.innerHTML=`<div class="hd"><span class="ty">Layout file</span><div class="nm">${esc(f.name)}</div><div class="meta">${ws.filter(x=>x.state==='shown').length} windows shown · ${ws.length} positioned windows${skin?` · skin <b>${esc(skin)}</b>`:''}</div></div>
+      ${skin&&S.skins.length&&!S.skins.includes(skin)?`<p class="note warn">Skin "${esc(skin)}" isn't in the uifiles folder you opened, so sizes and artwork come from default.</p>`:''}
+      ${!S.items.size?'<p class="note">Open the uifiles folder to see real window artwork and the sizes of fixed-size windows.</p>':''}
+      <p class="note">Click a window on the canvas or in the list. Drag to move it; drag on empty space to box-select; pan with the right mouse button or by holding Space. Windows that store their own size can be resized with the handles. Edges snap to the screen centre and to other windows; hold Alt to place freely.</p>
+      <div class="acts"><button id="lAll">Re-anchor all shown windows to the nearest edge</button></div>
+      <p class="note">Re-anchoring keeps every window exactly where it is, but measures it from the closest screen edge or the centre. That way it stays in a sensible place if you change resolution.</p>`;
+    $('#lAll').onclick=()=>ltx(()=>{for(const x of windows()) if(x.state==='shown'){const [a,b]=nearest(x);reanchor(x,a,b)}},'Re-anchored all shown windows');
+    return}
+  const g=k=>iget(f,w.name,k)??'';
+  const sel=(id,opts,v)=>`<select id="${id}">${opts.map(o=>`<option${o===v?' selected':''}>${o}</option>`).join('')}</select>`;
+  const yn=(k,lab,tip)=>lrow(lab,`<select data-k="${k}"><option value=""${g(k)===''?' selected':''}>(not set)</option><option value="1"${g(k)==='1'?' selected':''}>yes</option><option value="0"${g(k)==='0'?' selected':''}>no</option></select>`,tip);
+  const num=(k,lab,tip)=>lrow(lab,`<input type="number" data-k="${k}" value="${esc(g(k))}">`,tip);
+  const sc=screenFor(w.name);const bg={r:+g('BGTint.red')||0,g:+g('BGTint.green')||0,b:+g('BGTint.blue')||0};
+  
+  box.innerHTML=`<div class="hd"><span class="ty">${w.state==='shown'?'Shown':w.state==='demand'?'On demand':'Closed'}</span><div class="nm">${esc(w.name)}</div>
+    <div class="meta">${w.members.length>1?`Display type ${w.dtype} of the ${esc(w.fam)} window · `:''}${w.src==='ini'?'Size from the layout file':w.src==='skin'?`Size from the skin (${esc(sc&&sc.file?sc.file:sc&&sc.entry?sc.entry.doc.name:'')})`:w.src==='snap'?'Size snapped to its grid of cells':w.src==='measured'?'Size measured in game':'Size unknown: placeholder shown'}${w.off?' · <span class="warn">partly off-screen</span>':''}</div></div>
+    ${w.members.length>1?`<div class="row set"><label>Display type</label><select id="lDt">${w.members.map(m=>`<option value="${esc(m.name)}"${m.name===w.name?' selected':''}>${m.dtype?'Type '+m.dtype:'Base'}${m.state==='shown'?' (in use)':''}</option>`).join('')}</select><span></span></div>
+      <p class="note">Each display type keeps its own saved position. The game uses the one marked "in use", and the others only matter if you switch types in the window's menu.${w.state!=='shown'?` <span class="warn">You're looking at a type that isn't in use.</span>`:''}</p>${w.state!=='shown'?'<div class="acts"><button id="lUse">Use this display type in game</button></div>':''}`:''}
+    ${w.stored||w.src!=='guess'?`<div class="note" style="border:1px solid var(--line);border-radius:6px;padding:6px 8px">Saved size <b>${w.stored?w.sw+'×'+w.sh:'none'}</b> · in game <b>${w.w}×${w.h}</b>${w.lim.mnW||w.lim.mxW||w.lim.mnH||w.lim.mxH?`<br>Skin limits: width ${w.lim.mnW||'–'} to ${w.lim.mxW||'–'}, height ${w.lim.mnH||'–'} to ${w.lim.mxH||'–'}`:''}${w.why?'<br>'+esc(w.why):''}${w.ghost?'<br>The dashed outline is where the saved size would put it.':''}${w.ghost&&w.resizable?'<div class="acts" style="margin:6px 0 0"><button id="lMatch">Save the in-game size</button></div>':''}
+      ${w.stored&&!w.ts?`<details style="margin-top:4px"><summary>Snaps to its contents? Enter its in-game size</summary><div class="pair" style="margin:6px 0"><input type="number" id="lMW" placeholder="W" value="${(userSizes[w.key]||{}).w||''}"><input type="number" id="lMH" placeholder="H" value="${(userSizes[w.key]||{}).h||''}"><button id="lMSet">Set</button><button id="lMClr" class="x">clear</button></div><span class="note">For windows like the spell gem bar, which shrink to whole gems or buttons. Measure the window in a screenshot. This is remembered in this browser and isn't written to your file.</span></details>`:''}</div>`:''}
+    <div class="quick">${[['X',w.r.x],['Y',w.r.y],['W',w.w],['H',w.h]].map(([k,v])=>`<label>${k}<input type="number" data-q="${k}" value="${v}" ${(k==='W'||k==='H')&&!w.resizable?'disabled title="This window\'s size comes from the skin"':''}></label>`).join('')}</div>
+    <p class="note">Screen pixels from the top-left corner, at ${L.W}×${L.H}.</p>
+    ${lrow('Horizontal anchor',sel('lXr',['left','center','right'],w.xr),'Which screen edge (or the centre) the window is measured from')}
+    ${lrow('Vertical anchor',sel('lYr',['top','center','bottom'],w.yr))}
+    ${lrow('XPos',`<input data-k="XPos" value="${esc(g('XPos'))}">`)}${lrow('YPos',`<input data-k="YPos" value="${esc(g('YPos'))}">`)}
+    ${(()=>{const q=visInset(w),c=visCal[skinName()+'|'+w.name];return `<p class="note">Visible panel starts ${q.l}/${q.r}/${q.t}/${q.b} px in (left/right/top/bottom), ${c?'measured from your screenshot':q.src==='contents'?'from what your skin draws inside this see-through window':'from your skin\'s border art'}.${c?' <a href="#" id="lCalClr" style="color:var(--teal)">forget</a>':''}</p>`})()}
+    <details class="grp" open><summary>Organise (editor only, not saved in the .ini)</summary>
+      <div class="acts"><button id="lLock">${isLocked(w.name)?'Unlock':'Lock'}</button>${groupOf(w.name)?`<button id="lUngroup">Leave group</button>`:''}</div>
+      ${groupOf(w.name)?`<p class="note">Grouped with ${[...groupOf(w.name)].filter(n=>n!==w.name).map(esc).join(', ')}.</p>`:''}
+      <div class="row set"><label>Attach to</label><select id="lAtt"><option value="">(free)</option>${L.vis.filter(x=>x.name!==w.name&&!movers([w.name]).has(x.name)).map(x=>`<option value="${esc(x.name)}"${linkTo(w.name)===x.name?' selected':''}>${esc(x.fam||x.name)}</option>`).join('')}</select><span></span></div>
+      ${(()=>{const l=fullLink(w.name);if(!l) return '';const E={l:'left',r:'right',c:'centre',t:'top',b:'bottom',m:'middle'};
+        const sel=(id,v,ks)=>`<select id="${id}" style="width:auto">${ks.map(k=>`<option value="${k}"${k===v?' selected':''}>${E[k]}</option>`).join('')}</select>`;
+        return `<div class="note" style="border:1px solid var(--line);border-radius:6px;padding:6px 8px">Kept in place relative to <b>${esc(l.to)}</b> (${l.vis?'visible':'outer'} edges):
+        <div class="pair" style="margin:4px 0">${sel('lkHc',l.h.ce,['l','c','r'])} edge is <input type="number" id="lkHg" value="${l.h.gap}" style="width:64px"> px from its ${sel('lkHp',l.h.pe,['l','c','r'])}</div>
+        <div class="pair">${sel('lkVc',l.v.ce,['t','m','b'])} edge is <input type="number" id="lkVg" value="${l.v.gap}" style="width:64px"> px from its ${sel('lkVp',l.v.pe,['t','m','b'])}</div>
+        <span>The distance holds when ${esc(l.to)} moves or changes size. Dragging this window sets a new distance.</span></div>`})()}
+      <p class="note">${Object.keys(L.ed.links).some(c=>linkTo(c)===w.name)?'Attached to this window: '+Object.keys(L.ed.links).filter(c=>linkTo(c)===w.name).map(esc).join(', ')+'. ':''}Shift+click more windows, or drag a box on empty canvas, to group or align them.</p></details>
+    <div class="acts"><button id="lNear">Anchor to nearest edge</button>${sc&&sc.entry?'<button id="lOpen">Open in Window designer</button>':''}</div>
+    <details class="grp" open><summary>Window settings</summary>
+    ${yn('Show','Open in game','Show=1 opens the window when you log in. Not set means it opens only when needed (bags, item windows).')}
+    ${yn('Locked','Locked')}${num('Alpha','Alpha (0–255)')}${yn('Fades','Fades when idle')}${num('FadeToAlpha','Faded alpha')}${num('Delay','Fade delay (ms)')}${num('Duration','Fade time (ms)')}
+    ${yn('Border','Border')}${yn('ClickThrough','Click-through')}${yn('Escapable','Closes with Esc')}${num('BGType','Background type')}
+    ${g('BGTint.red')!==''?lrow('Background tint',`<div class="pair"><input type="color" id="lTint" value="${hex(bg)}"><span class="note">${bg.r},${bg.g},${bg.b}</span></div>`):''}
+    </details>
+    <details class="grp"><summary>All settings in [${esc(w.name)}]</summary><div id="lAllKeys"></div></details>`;
+  const ak=$('#lAllKeys');const s=f.secs.get(w.name);
+  ak.innerHTML=[...s.keys.keys()].map(k=>lrow(esc(k),`<input data-k="${esc(k)}" value="${esc(g(k))}">`)).join('');
+  box.querySelectorAll('[data-k]').forEach(inp=>inp.onchange=()=>{const k=inp.dataset.k,v=inp.value.trim();ltx(()=>{if(v===''&&inp.tagName==='SELECT') idel(f,w.name,k);else iset(f,w.name,k,v)},`${w.name}: ${k} = ${v||'(removed)'}`)});
+  if(isLocked(w.name)) box.querySelectorAll('[data-q]').forEach(i=>{i.disabled=true;i.title='Locked'});
+  box.querySelectorAll('[data-q]').forEach(inp=>inp.onchange=()=>{const v=parseInt(inp.value,10);if(isNaN(v)) return;const q=inp.dataset.q;const nr={...w.r};nr[{X:'x',Y:'y',W:'w',H:'h'}[q]]=v;ltx(()=>{if(q==='X'||q==='Y'){const dx=nr.x-w.r.x,dy=nr.y-w.r.y;moveWins([...movers([w.name])].map(winBy),dx,dy)}else setRect(w,nr,'resize')},'Moved/resized '+w.name)});
+  $('#lXr').onchange=()=>ltx(()=>reanchor(w,$('#lXr').value,w.yr),`${w.name} anchored ${$('#lXr').value}`);
+  $('#lYr').onchange=()=>ltx(()=>reanchor(w,w.xr,$('#lYr').value),`${w.name} anchored ${$('#lYr').value}`);
+  $('#lNear').onclick=()=>{const [a,b]=nearest(w);ltx(()=>reanchor(w,a,b),`${w.name} anchored ${a}/${b}`)};
+  const t=$('#lTint');if(t) t.onchange=()=>{const v=t.value;ltx(()=>{iset(f,w.name,'BGTint.red',String(parseInt(v.slice(1,3),16)));iset(f,w.name,'BGTint.green',String(parseInt(v.slice(3,5),16)));iset(f,w.name,'BGTint.blue',String(parseInt(v.slice(5,7),16)))},w.name+' tint '+v)};
+  $('#lLock').onclick=()=>{isLocked(w.name)?L.ed.locked.delete(w.name):L.ed.locked.add(w.name);edChanged(`${isLocked(w.name)?'Locked':'Unlocked'} ${w.name}`)};
+  {const ug=$('#lUngroup');if(ug) ug.onclick=()=>{const g=groupOf(w.name);g.delete(w.name);L.ed.groups=L.ed.groups.filter(x=>x.size>1);edChanged(w.name+' left its group')}}
+  $('#lAtt').onchange=()=>{const v=$('#lAtt').value;if(v) L.ed.links[w.name]=mkLink(w.name,v);else delete L.ed.links[w.name];edChanged(v?`${w.name} is attached to ${v}`:`${w.name} is free`)};
+  {const l=L.ed.links[w.name];if(l&&typeof l==='object'&&$('#lkHg')){
+    const apply=()=>{l.h={ce:$('#lkHc').value,pe:$('#lkHp').value,gap:parseInt($('#lkHg').value,10)||0};l.v={ce:$('#lkVc').value,pe:$('#lkVp').value,gap:parseInt($('#lkVg').value,10)||0};
+      // re-place the child now: pretend the parent moved so the sync enforces the relation
+      ltx(()=>{const pre=new Map(windows().map(x=>[x.name,{...x.r}]));pre.set(l.to,{x:NaN,y:0,w:0,h:0});syncLinks(pre)},`${w.name}: distance from ${l.to} updated`)};
+    ['lkHc','lkHp','lkHg','lkVc','lkVp','lkVg'].forEach(id=>$('#'+id).onchange=apply)}}
+  const cc=$('#lCalClr');if(cc) cc.onclick=e=>{e.preventDefault();delete visCal[skinName()+'|'+w.name];saveCal();lafter(w.name+': measured edges cleared')};
+  const dt=$('#lDt');if(dt) dt.onchange=()=>{L.sel=dt.value;renderLList(true);renderLProps();draw()};
+  const us=$('#lUse');if(us) us.onclick=()=>ltx(()=>{for(const m of w.members) if(iget(f,m.name,'Show')!=null||m===w) iset(f,m.name,'Show',m===w?'1':'0')},`${w.fam}: now using ${w.dtype?'type '+w.dtype:'the base type'}`);
+  const mt=$('#lMatch');if(mt) mt.onclick=()=>ltx(()=>{iset(f,w.name,'Width',String(w.w));iset(f,w.name,'Height',String(w.h));const p=fromPx(w.xr,w.yr,w.r.x,w.r.y,w.w,w.h,w.ko);iset(f,w.name,'XPos',fmtP(p.px));iset(f,w.name,'YPos',fmtP(p.py))},w.name+': saved the in-game size');
+  const ms=$('#lMSet');if(ms) ms.onclick=()=>{const a=parseInt($('#lMW').value,10),b=parseInt($('#lMH').value,10);if(a>0&&b>0){userSizes[w.key]={w:a,h:b,note:'entered by you'};saveSizes();lafter(w.name+': in-game size set to '+a+'×'+b)}};
+  const mc=$('#lMClr');if(mc) mc.onclick=()=>{delete userSizes[w.key];saveSizes();lafter(w.name+': in-game size cleared')};
+  const o=$('#lOpen');if(o) o.onclick=()=>{if(sc.overlay&&w.dtype) openVariantInDesigner(sc.base,String(w.dtype));else{switchApp('design');S.designOverlay=null;S.designVariant=null;openEntry(item(sc.base,'Screen')||sc.entry)}};
+}
+/* --- files --- */
+function setCur(f){L.cur=f;L.multi=new Set();loadEd();f.origSecs=f.origSecs||new Map(f.order.map(s=>[s.name,f.orig.split(/\r?\n/).slice(s.h,s.end+1).join('\n')]));
+  $('#sIni').value=String(L.files.indexOf(f));L.sel=null;
+  const skin=iget(f,'Main','UISkin');
+  if(skin&&S.skins.includes(skin)&&S.skin!==skin&&!dirtyDocs().length){S.skin=skin;$('#sSkin').value=skin;S.variants.clear();loadSkin().then(()=>{draw();renderLList();renderLProps()})}
+  renderLList();renderLProps();draw();}
+async function openIni(list){
+  const added=[];
+  for(const file of list){const bytes=new Uint8Array(await file.arrayBuffer());
+    if(/^eqclient\.ini$/i.test(file.name)){const f=parseIni(file.name,bytes);const fs=iget(f,'VideoMode','Fullscreen')!=='0';
+      const W=parseInt(iget(f,'VideoMode',fs?'Width':'WindowedWidth'),10),H=parseInt(iget(f,'VideoMode',fs?'Height':'WindowedHeight'),10);
+      if(W&&H){L.W=W;L.H=H;$('#iW').value=W;$('#iH').value=H}continue}
+    const f=parseIni(file.name,bytes);if(!f.order.some(s=>s.keys.has('XPos'))){msg(file.name+' has no window positions, skipped.');continue}
+    const old=L.files.findIndex(x=>low(x.name)===low(f.name));if(old>=0) L.files[old]=f;else L.files.push(f);added.push(f)}
+  if(!added.length){if(L.cur) draw();return}
+  // guess resolution from the Minimized<W>x<H> keys when eqclient.ini wasn't given
+  if(!list.some(x=>/^eqclient\.ini$/i.test(x.name))){const m=added[0].lines.join('\n').match(/Minimized(\d{3,5})x(\d{3,5})=/);if(m){L.W=+m[1];L.H=+m[2];$('#iW').value=L.W;$('#iH').value=L.H}}
+  $('#sIni').innerHTML=L.files.map((f,i)=>`<option value="${i}">${esc(f.name)}</option>`).join('');$('#sIni').disabled=false;
+  $('#lempty').style.display='none';
+  const pick=added.find(f=>/_LO1\.ini$/i.test(f.name))||added[0];setCur(pick);lFit();
+  msg(`Opened ${added.map(f=>f.name).join(', ')} · screen ${L.W}×${L.H}`);updateButtons();
+}
+$('#bOpenIni').onclick=()=>$('#fIni').click();
+$('#fIni').onchange=async()=>{const fs=[...$('#fIni').files];$('#fIni').value='';if(!fs.length) return;
+  if(L.files.some(fileDirty)&&!await ask('Open other files?','Unsaved layout changes in files you re-open will be discarded.')) return;await openIni(fs)};
+$('#sIni').onchange=()=>{const f=L.files[+$('#sIni').value];if(f) setCur(f)};
+const setRes=()=>{const W=parseInt($('#iW').value,10),H=parseInt($('#iH').value,10);if(W>200&&H>200){L.W=W;L.H=H;lFit()}};
+$('#iW').onchange=setRes;$('#iH').onchange=setRes;
+$('#bBg').onclick=()=>$('#fBg').click();
+$('#fBg').onchange=async()=>{const f=$('#fBg').files[0];$('#fBg').value='';if(!f) return;try{L.bg=await createImageBitmap(f);L.bgData=null;$('#rBg').style.display='';$('#bMeasure').style.display='';msg('Screenshot loaded behind the layout. Use the slider to fade it. If it shows this same layout file, click Measure edges to learn exactly where each window\'s visible panel begins.');draw()}catch(e){msg('Could not read that image.')}};
+$('#rBg').oninput=()=>{L.bgA=$('#rBg').value/100;draw()};
+function switchApp(a){
+  if(S.app===a) return;views[S.app]=S.view;S.app=a;S.view=views[a];document.body.dataset.app=a;
+  $('#mLayout').classList.toggle('on',a==='layout');$('#mDesign').classList.toggle('on',a==='design');
+  if(a==='layout'){lafter()}else{if(S.tree&&!views.designFitted){views.designFitted=1;fit()}draw();renderTree();renderInspector();renderCrumbs()}
+  $('#crumbs').style.display=a==='layout'?'none':'';updateButtons();
+}
+$('#mLayout').onclick=()=>switchApp('layout');$('#mDesign').onclick=()=>switchApp('design');
+/* --- saving a layout --- */
+$('#bSave').addEventListener('click',ev=>{if(S.app!=='layout') return;ev.stopImmediatePropagation();
+  const f=L.cur;if(!f) return;const m=f.name.match(/^(.*_LO)(\d+)(\.ini)$/i);
+  $('#lsSrc').innerHTML=`Based on <b>${esc(f.name)}</b>${fileDirty(f)?' with your changes':' (no changes yet)'}.`;
+  $('#lsNum').value=m?m[2]:'';$('#lsNum').disabled=!m;$('#lsName').value=f.name;
+  const upd=()=>{if(m&&$('#lsNum').value) $('#lsName').value=m[1]+$('#lsNum').value+m[3];const nm=$('#lsName').value;const other=L.files.find(x=>low(x.name)===low(nm));
+    $('#lsNote').innerHTML=low(nm)===low(f.name)?'This replaces the same loadout file. Its original goes in the backup folder.':
+      other?`This replaces loadout file <b>${esc(nm)}</b>, which you opened too, so its original goes in the backup folder as well.`:
+      `<span class="warn">If <b>${esc(nm)}</b> already exists in your game folder, open it here first so its original is backed up too. Copying this file in replaces that whole loadout's window settings.</span>`};
+  $('#lsNum').oninput=upd;$('#lsName').oninput=()=>{$('#lsNote').textContent=''};upd();$('#lsMsg').textContent='';$('#mLSave').classList.add('open');
+},true);
+$('#lsX').onclick=()=>$('#mLSave').classList.remove('open');
+$('#lsCopy').onclick=async()=>{try{await navigator.clipboard.writeText(iniText(L.cur));$('#lsMsg').textContent='Copied the file text.'}catch(e){$('#lsMsg').textContent='Clipboard not available here.'}};
+$('#lsZip').onclick=async()=>{
+  const f=L.cur;const nm=($('#lsName').value.trim()||f.name).replace(/[\\/:*?"<>|]/g,'_');const st='_backup_'+stamp();
+  const files=[{name:nm,data:encode(iniText(f),f)},{name:`${st}/${f.name}`,data:f.bytes}];
+  const other=L.files.find(x=>low(x.name)===low(nm)&&x!==f);if(other) files.push({name:`${st}/${other.name}`,data:other.bytes});
+  files.unshift({name:'README.txt',data:new TextEncoder().encode([`EQ UI Workbench layout export, ${new Date().toLocaleString()}`,'',`${nm}  your new window layout (based on ${f.name}).`,`${st}/  untouched originals of the loaded files this could replace.`,'',
+    'To install:','1. Close EverQuest (or camp to character select). The game rewrites this file when you camp or exit.',`2. Copy ${nm} into your EverQuest Legends folder (next to eqclient.ini), replacing the old one.`,'3. Log in with that loadout.','',
+    'To undo: copy the file from the backup folder back over it.'].join('\r\n'))});
+  const z=zip(files);const zn=nm.replace(/\.ini$/i,'')+'_'+stamp()+'.zip';$('#lsMsg').textContent='Preparing download…';
+  try{await save(zn,z);$('#lsMsg').textContent='Saved '+zn+'.'}catch(e){$('#lsMsg').textContent=e&&e.code==='declined'?'Download cancelled.':'Download failed: '+(e&&(e.message||e.code)||e)}
+};
+
+renderLList();renderLProps();updateButtons();$('#crumbs').style.display='none';
+window.__eq={renderLProps,visInsetArt,P,renderInsetDebug,screenFor,wdtOf,kid,getS,frameOf,frameDims,docOf,visInset,renderedInset,measureWin,L,openIni,switchApp,windows,toPx,fromPx,iniText,S,ingest,openEntry,item,buildText,dirtyDocs,edit,setPath,applyRect,undo,redo,zip,rebuild,draw,fit};
+resize();
+}
+</script>
+</body>
+</html>
