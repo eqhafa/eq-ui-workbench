@@ -131,7 +131,7 @@ body[data-app=design] .m-l{display:none!important}
   <button class="pri m-l" id="bOpenIni">Open layout .ini</button>
   <input type="file" id="fIni" accept=".ini" multiple hidden>
   <label class="m-l">File <select id="sIni" disabled></select></label>
-  <label class="m-l">Screen <input id="iW" type="number" value="2194" style="width:70px"> × <input id="iH" type="number" value="1234" style="width:70px"></label>
+  <label class="m-l">Screen <input id="iW" type="number" value="1920" style="width:70px"> × <input id="iH" type="number" value="1080" style="width:70px"></label><span class="m-l" id="resNote" style="display:none;color:#e0b050;font-size:12px;cursor:help" title="Window positions depend on the exact screen size EverQuest uses, which already includes your Windows display scaling. Open eqclient.ini from your EverQuest folder (with your layout file, or on its own) to fill it in, or type it here.">⚠ screen size not from eqclient.ini</span>
   <button class="m-l" id="bBg" title="Load a game screenshot behind the layout to check positions">Screenshot</button>
   <input type="file" id="fBg" accept="image/*" hidden>
   <input class="m-l" id="rBg" type="range" min="0" max="100" value="50" title="Screenshot opacity" style="width:80px;display:none">
@@ -175,7 +175,7 @@ body[data-app=design] .m-l{display:none!important}
     <div id="lempty" class="m-l" style="position:absolute;inset:0;display:grid;place-items:center;padding:24px">
       <div class="card" style="max-width:580px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:28px">
         <h2 style="font:600 26px/1.1 Cinzel,serif;margin:0 0 10px;color:var(--brass2)">Arrange your windows on screen</h2>
-        <p class="note" style="font-size:14px">1. <b>Open layout .ini</b> and choose a loadout file from <code>D:\EverQuest Legends</code>, such as <code>UI_Hafa_halas_LO1.ini</code>. You can pick several loadouts at once, and <code>eqclient.ini</code> too, so your screen size is filled in.</p>
+        <p class="note" style="font-size:14px">1. <b>Open layout .ini</b> and choose a loadout file from your EverQuest folder, such as <code>UI_&lt;character&gt;_&lt;server&gt;_LO1.ini</code>. You can pick several loadouts at once. <b>Pick <code>eqclient.ini</code> from the same folder too</b>: it holds the screen size EverQuest uses (with your Windows display scaling already applied), which every window position depends on.</p>
         <p class="note" style="font-size:14px">2. Optional but recommended: <b>Open uifiles folder</b>. Windows then show your skin's real artwork, and windows that don't store a size get the correct one.</p>
         <p class="note" style="font-size:14px">Files are only read. Saving gives you a .zip with the new loadout file plus an untouched backup of the original.</p>
       </div>
@@ -183,7 +183,7 @@ body[data-app=design] .m-l{display:none!important}
     <div id="empty" class="m-d">
       <div class="card">
         <h2>Edit your EverQuest windows visually</h2>
-        <p>Choose your <code>uifiles</code> folder, for example <code>D:\EverQuest Legends\uifiles</code>. Every skin inside it shows up in the Skin menu, and any file a skin is missing falls back to <code>default</code>, the same way the game does.</p>
+        <p>Choose your <code>uifiles</code> folder, the one inside your EverQuest folder. Every skin inside it shows up in the Skin menu, and any file a skin is missing falls back to <code>default</code>, the same way the game does.</p>
         <p>Your files are only read. Nothing is written back to your game folder: <b>Save</b> gives you a .zip with the edited files plus a backup copy of every original they replace.</p>
         <div class="drop" id="drop">or drop the uifiles folder here</div>
       </div>
@@ -1367,7 +1367,7 @@ function hasVisible(n){if(n.hidden) return false;const t=n.type;if(/Template$/.t
   return true}
 const inOrientation=(n,tn)=>!(/Horizontal/i.test(n.entry.name)&&/Vertical/i.test(tn))&&!(/Vertical/i.test(n.entry.name)&&/Horizontal/i.test(tn));
 /* ================= SCREEN LAYOUT (UI_*.ini loadout files) ================= */
-const L={files:[],cur:null,W:2194,H:1234,sel:null,undo:[],redo:[],eye:new Map(),demand:false,hidden:false,labels:true,art:true,bg:null,bgA:.5,guides:[],last:[],vis:[]};
+const L={files:[],cur:null,W:1920,H:1080,resSrc:'default',sel:null,undo:[],redo:[],eye:new Map(),demand:false,hidden:false,labels:true,art:true,bg:null,bgA:.5,guides:[],last:[],vis:[]};
 S.app='layout';S.overlay=null;S.variants=new Map();
 const views={layout:{z:.5,px:30,py:60},design:S.view};S.view=views.layout;
 function parseIni(name,bytes){
@@ -1386,13 +1386,13 @@ function idel(f,sec,k){const s=f.secs.get(sec);const i=s&&s.keys.get(k);if(i!=nu
 const iniText=f=>f.lines.join(f.eol);
 const fileDirty=f=>iniText(f)!==f.orig;
 const fmtP=v=>(Math.abs(v)<5e-7?0:v).toFixed(6)+'%';
-/* Position model, calibrated against an in-game screenshot of Hafa's LO1 layout (2194x1234, 175% Windows scaling):
+/* Position model, calibrated against in-game screenshots (tested at 2194x1234, i.e. 4K at 175% Windows scaling):
    XRef left/right: XPos% of the FULL screen width, from that screen edge to the same window edge (positive = inward).
    YRef top/bottom: YPos% of the FULL screen height, from that edge to the same window edge (positive = inward).
    XRef center:     XPos% of HALF the screen width, from screen centre to window centre (positive = right).
    YRef center:     YPos% of HALF the screen height, from screen centre to window centre (positive = down). */
 /* KeepOnScreenOffset (e.g. -3,-3 in LasherUI) lets a window hang that far past the screen edge: the game measures
-   positions inside the screen grown by that much on every side. Checked against Hafa's screenshots to within a pixel. */
+   positions inside the screen grown by that much on every side. Checked against in-game screenshots to within a pixel. */
 function toPx(xr,yr,px,py,w,h,k){const ex=xr!=='center'&&k&&k.ex||0,ey=yr!=='center'&&k&&k.ey||0,W=L.W+2*ex,H=L.H+2*ey,f=px/100,g=py/100;
   const x=(xr==='right'?W-w-f*W:xr==='center'?W/2+f*W/2-w/2:f*W)-ex;
   const y=(yr==='bottom'?H-h-g*H:yr==='center'?H/2+g*H/2-h/2:g*H)-ey;return {x:Math.round(x),y:Math.round(y),w,h}}
@@ -1617,7 +1617,7 @@ function renderedInset(w){
 }
 function renderInsetDebug(w,off){const save=ctx;ctx=off.getContext('2d');ctx.setTransform(1,0,0,1,-w.r.x,-w.r.y);let ok;try{ok=drawLayoutWin(w)}finally{ctx=save}return ok}
 function isTransparentWin(w){const sc=screenFor(w.name);return !!(sc&&sc.entry&&B(sc.entry.el,'Style_Transparent'))}
-function visInset(w){const a=visInsetArt(w),r=(w&&w.name&&isTransparentWin(w)&&renderedInset(w))||{}, // see-through windows: the visible edge is whatever is drawn inside them // the border art alone matched Hafa's screenshots best (child pieces can reach the edge in the editor's drawing)
+function visInset(w){const a=visInsetArt(w),r=(w&&w.name&&isTransparentWin(w)&&renderedInset(w))||{}, // see-through windows: the visible edge is whatever is drawn inside them // the border art alone matched in-game screenshots best (child pieces can reach the edge in the editor's drawing)
   _u=0,c=w&&w.name?visCal[skinName()+'|'+w.name]:null||{};const cc=c||{};
   const pick=k=>cc[k]??r[k]??a[k];return {l:pick('l'),r:pick('r'),t:pick('t'),b:pick('b'),src:Object.keys(cc).length?'screenshot':Object.keys(r).length?'contents':'skin'}}
 function visInsetArt(w){
@@ -1908,22 +1908,24 @@ async function openIni(list){
   for(const file of list){const bytes=new Uint8Array(await file.arrayBuffer());
     if(/^eqclient\.ini$/i.test(file.name)){const f=parseIni(file.name,bytes);const fs=iget(f,'VideoMode','Fullscreen')!=='0';
       const W=parseInt(iget(f,'VideoMode',fs?'Width':'WindowedWidth'),10),H=parseInt(iget(f,'VideoMode',fs?'Height':'WindowedHeight'),10);
-      if(W&&H){L.W=W;L.H=H;$('#iW').value=W;$('#iH').value=H}continue}
+      if(W&&H){L.W=W;L.H=H;L.resSrc='eqclient';$('#iW').value=W;$('#iH').value=H}else msg('eqclient.ini has no screen size in it; check the Screen boxes.');resNote();continue}
     const f=parseIni(file.name,bytes);if(!f.order.some(s=>s.keys.has('XPos'))){msg(file.name+' has no window positions, skipped.');continue}
     const old=L.files.findIndex(x=>low(x.name)===low(f.name));if(old>=0) L.files[old]=f;else L.files.push(f);added.push(f)}
-  if(!added.length){if(L.cur) draw();return}
+  if(!added.length){if(L.resSrc==='eqclient') msg(`Screen size ${L.W}×${L.H} from eqclient.ini`);if(L.cur){lFit();draw()}return}
   // guess resolution from the Minimized<W>x<H> keys when eqclient.ini wasn't given
-  if(!list.some(x=>/^eqclient\.ini$/i.test(x.name))){const m=added[0].lines.join('\n').match(/Minimized(\d{3,5})x(\d{3,5})=/);if(m){L.W=+m[1];L.H=+m[2];$('#iW').value=L.W;$('#iH').value=L.H}}
+  if(!list.some(x=>/^eqclient\.ini$/i.test(x.name))){const m=added[0].lines.join('\n').match(/Minimized(\d{3,5})x(\d{3,5})=/);if(m&&L.resSrc!=='eqclient'){L.W=+m[1];L.H=+m[2];L.resSrc='guess';$('#iW').value=L.W;$('#iH').value=L.H}}
   $('#sIni').innerHTML=L.files.map((f,i)=>`<option value="${i}">${esc(f.name)}</option>`).join('');$('#sIni').disabled=false;
   $('#lempty').style.display='none';
   const pick=added.find(f=>/_LO1\.ini$/i.test(f.name))||added[0];setCur(pick);lFit();
-  msg(`Opened ${added.map(f=>f.name).join(', ')} · screen ${L.W}×${L.H}`);updateButtons();
+  resNote();
+  msg(`Opened ${added.map(f=>f.name).join(', ')} · screen ${L.W}×${L.H}`+(L.resSrc==='eqclient'?' (from eqclient.ini)':L.resSrc==='guess'?' (guessed from the layout file: open eqclient.ini to be exact)':' (default: open eqclient.ini so windows land where the game puts them)'));updateButtons();
 }
 $('#bOpenIni').onclick=()=>$('#fIni').click();
 $('#fIni').onchange=async()=>{const fs=[...$('#fIni').files];$('#fIni').value='';if(!fs.length) return;
   if(L.files.some(fileDirty)&&!await ask('Open other files?','Unsaved layout changes in files you re-open will be discarded.')) return;await openIni(fs)};
 $('#sIni').onchange=()=>{const f=L.files[+$('#sIni').value];if(f) setCur(f)};
-const setRes=()=>{const W=parseInt($('#iW').value,10),H=parseInt($('#iH').value,10);if(W>200&&H>200){L.W=W;L.H=H;lFit()}};
+const setRes=()=>{const W=parseInt($('#iW').value,10),H=parseInt($('#iH').value,10);if(W>200&&H>200){L.W=W;L.H=H;L.resSrc='manual';resNote();lFit()}};
+function resNote(){const n=$('#resNote');if(n) n.style.display=(L.files.length&&(L.resSrc==='default'||L.resSrc==='guess'))?'':'none'}
 $('#iW').onchange=setRes;$('#iH').onchange=setRes;
 $('#bBg').onclick=()=>$('#fBg').click();
 $('#fBg').onchange=async()=>{const f=$('#fBg').files[0];$('#fBg').value='';if(!f) return;try{L.bg=await createImageBitmap(f);L.bgData=null;$('#rBg').style.display='';$('#bMeasure').style.display='';msg('Screenshot loaded behind the layout. Use the slider to fade it. If it shows this same layout file, click Measure edges to learn exactly where each window\'s visible panel begins.');draw()}catch(e){msg('Could not read that image.')}};
@@ -1953,7 +1955,7 @@ $('#lsZip').onclick=async()=>{
   const files=[{name:nm,data:encode(iniText(f),f)},{name:`${st}/${f.name}`,data:f.bytes}];
   const other=L.files.find(x=>low(x.name)===low(nm)&&x!==f);if(other) files.push({name:`${st}/${other.name}`,data:other.bytes});
   files.unshift({name:'README.txt',data:new TextEncoder().encode([`EQ UI Workbench layout export, ${new Date().toLocaleString()}`,'',`${nm}  your new window layout (based on ${f.name}).`,`${st}/  untouched originals of the loaded files this could replace.`,'',
-    'To install:','1. Close EverQuest (or camp to character select). The game rewrites this file when you camp or exit.',`2. Copy ${nm} into your EverQuest Legends folder (next to eqclient.ini), replacing the old one.`,'3. Log in with that loadout.','',
+    'To install:','1. Close EverQuest (or camp to character select). The game rewrites this file when you camp or exit.',`2. Copy ${nm} into your EverQuest folder (next to eqclient.ini), replacing the old one.`,'3. Log in with that loadout.','',
     'To undo: copy the file from the backup folder back over it.'].join('\r\n'))});
   const z=zip(files);const zn=nm.replace(/\.ini$/i,'')+'_'+stamp()+'.zip';$('#lsMsg').textContent='Preparing download…';
   try{await save(zn,z);$('#lsMsg').textContent='Saved '+zn+'.'}catch(e){$('#lsMsg').textContent=e&&e.code==='declined'?'Download cancelled.':'Download failed: '+(e&&(e.message||e.code)||e)}
