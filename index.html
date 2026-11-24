@@ -100,6 +100,22 @@ footer #msg{flex:1;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
 .modal h3{margin:0 0 8px;font:600 18px Cinzel,serif;color:var(--brass2)}
 .modal ul{padding-left:18px;margin:8px 0}
 .modal li{margin:3px 0}
+/* first-time tour */
+#ftue .box{width:min(980px,100%);padding:0;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);overflow:hidden;max-height:90vh}
+#ftue .fmedia{background:#0d0f13;display:grid;place-items:center;min-height:380px;border-right:1px solid var(--line);padding:14px}
+#ftue .fmedia img{max-width:100%;max-height:min(62vh,520px);border-radius:8px;border:1px solid var(--line);display:block}
+#ftue .ftext{padding:24px 26px 18px;display:flex;flex-direction:column;gap:10px;min-height:0;overflow:auto}
+#ftue .fstep{color:var(--mute);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+#ftue h3{font-size:24px;margin:0}
+#ftue .ftext p{margin:0;color:var(--ink);font-size:14px;line-height:1.55}
+#ftue .ftext ul{margin:0;padding-left:18px;color:var(--mute);font-size:13px;line-height:1.5}
+#ftue .ftext kbd{font:12px Inter,sans-serif;background:var(--panel2);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;color:var(--ink)}
+#ftue .fnav{margin-top:auto;display:flex;align-items:center;gap:8px;padding-top:12px}
+#ftue .fdots{display:flex;gap:6px;margin-right:auto}
+#ftue .fdots button{flex:0 0 9px;width:9px;height:9px;min-width:0;min-height:0;padding:0;margin:0;box-sizing:border-box;border-radius:50%;border:0;background:var(--line);cursor:pointer}
+#ftue .fdots button.on{background:var(--brass)}
+#ftue.nomedia .box{grid-template-columns:1fr;width:min(560px,100%)}#ftue.nomedia .fmedia{display:none}
+@media (max-width:760px){#ftue .box{grid-template-columns:1fr}#ftue .fmedia{border-right:0;border-bottom:1px solid var(--line);min-height:0}}
 .prob{cursor:pointer}.prob:hover{color:var(--brass2)}
 .bar{position:fixed;top:0;left:0;z-index:20;height:3px;background:var(--brass);width:0;transition:width .2s;pointer-events:none}
 .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
@@ -127,6 +143,7 @@ body[data-app=design] .m-l{display:none!important}
 <header>
   <h1>EQ UI Workbench</h1>
   <div class="seg"><button id="mLayout" class="on">Screen layout</button><button id="mDesign">Window designer</button></div>
+  <button id="bGuide" title="Show the quick tour of the Screen layout">Guide</button>
   <span class="sep"></span>
   <button class="pri m-l" id="bOpenIni">Open layout .ini</button>
   <input type="file" id="fIni" accept=".ini" multiple hidden>
@@ -203,6 +220,12 @@ body[data-app=design] .m-l{display:none!important}
 <footer><span id="msg">Ready.</span><span id="pos"></span><span id="zoom"></span></footer>
 </div>
 
+<div class="modal" id="ftue" role="dialog" aria-modal="true" aria-labelledby="ftueT"><div class="box">
+  <div class="fmedia"><img id="ftueImg" alt=""></div>
+  <div class="ftext"><div class="fstep" id="ftueN"></div><h3 id="ftueT"></h3><div id="ftueB"></div>
+    <div class="fnav"><div class="fdots" id="ftueDots"></div><button id="ftueSkip">Skip tour</button><button id="ftueBack">Back</button><button class="pri" id="ftueNext">Next</button></div>
+  </div>
+</div></div>
 <div class="modal" id="mSave"><div class="box">
   <h3>Save changes</h3>
   <div id="saveList"></div>
@@ -1962,6 +1985,48 @@ $('#lsZip').onclick=async()=>{
 };
 
 renderLList();renderLProps();updateButtons();$('#crumbs').style.display='none';
+
+/* ---------- first-time tour of the Screen layout ---------- */
+const FTUE_KEY='eqwb-ftue';
+const FTUE=[
+ {img:'ftue/load.gif',t:'Arrange your windows',b:`<p>The Screen layout shows every window exactly where EverQuest puts it, so you can rearrange your UI without logging in.</p>
+  <ul><li>Click <b>Open layout .ini</b> and pick <code>UI_&lt;character&gt;_&lt;server&gt;_LO1.ini</code> from your EverQuest folder.</li>
+  <li>Pick <code>eqclient.ini</code> from the same folder too. It holds your screen size, with Windows display scaling included, which every position depends on.</li>
+  <li>Your files are only read. Nothing is changed until you save.</li></ul>`},
+ {img:'ftue/move.gif',t:'Drag windows into place',b:`<p>Drag a window to move it. Edges snap to the screen, its centre lines and other windows, so things line up without fiddling.</p>
+  <ul><li>Hold <kbd>Alt</kbd> while dragging to place a window freely.</li><li>Use the arrow keys to nudge the selected window by a pixel.</li>
+  <li>Pan with the right mouse button or by holding <kbd>Space</kbd>; scroll to zoom; <b>Fit</b> shows the whole screen.</li>
+  <li>The snap menu can use each window's outer edge or the edge of its visible frame.</li></ul>`},
+ {img:'ftue/resize.gif',t:'Resize by your skin\'s rules',b:`<p>Drag a window's handles to resize it. Windows follow your skin's real limits, and grid windows like spell bars and hot bars snap to whole rows and columns, just like in game.</p>
+  <ul><li>Click <b>Open uifiles folder</b> and choose your skin for exact sizes and its artwork.</li>
+  <li>Turn on <b>skin art</b> in the left panel to see the windows as they look in game.</li></ul>`},
+ {img:'ftue/select.gif',t:'Work with several at once',b:`<p>Drag across empty space to box-select windows, then drag any of them to move them together.</p>
+  <ul><li><kbd>Shift</kbd>+click adds or removes a window from the selection.</li><li><b>Undo</b> and <b>Redo</b> (<kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd>) cover every change.</li>
+  <li>Tick or untick windows in the left list to show or hide them on the canvas.</li></ul>`},
+ {img:'ftue/organise.png',t:'Lock, group and align',b:`<p>With windows selected, the right panel has tools to tidy them up.</p>
+  <ul><li><b>Group</b> keeps windows moving together; <b>Lock</b> stops a window moving by accident. These are editor-only and never change the game file.</li>
+  <li>Align edges, space windows evenly, or match their width and height.</li>
+  <li>Attach a window to another so it keeps its distance when the parent moves.</li></ul>`},
+ {img:'ftue/save.png',t:'Save safely',b:`<p><b>Save layout</b> downloads a .zip with your new layout file plus a <b>_backup</b> folder holding the original, untouched.</p>
+  <ul><li>Save as any loadout number to keep several layouts side by side.</li>
+  <li>Close EverQuest, or sit at character select, before copying the file in: the game rewrites it when you camp or exit.</li></ul>`}];
+let ftueI=0;
+function ftueShow(i){ftueI=Math.max(0,Math.min(FTUE.length-1,i));const s=FTUE[ftueI],m=$('#ftue'),img=$('#ftueImg');
+  m.classList.remove('nomedia');img.onerror=()=>m.classList.add('nomedia');img.src=s.img;img.alt=s.t;
+  $('#ftueN').textContent=`Screen layout · ${ftueI+1} of ${FTUE.length}`;$('#ftueT').textContent=s.t;$('#ftueB').innerHTML=s.b;
+  $('#ftueDots').innerHTML=FTUE.map((_,k)=>`<button class="${k===ftueI?'on':''}" data-k="${k}" aria-label="Step ${k+1}"></button>`).join('');
+  $('#ftueDots').querySelectorAll('button').forEach(b=>b.onclick=()=>ftueShow(+b.dataset.k));
+  $('#ftueBack').disabled=ftueI===0;$('#ftueNext').textContent=ftueI===FTUE.length-1?'Get started':'Next';}
+function ftueOpen(){FTUE.forEach(s=>{const p=new Image();p.src=s.img});ftueShow(0);$('#ftue').classList.add('open');$('#ftueNext').focus()}
+function ftueClose(){$('#ftue').classList.remove('open');try{localStorage.setItem(FTUE_KEY,'done')}catch(e){}}
+$('#ftueNext').onclick=()=>ftueI===FTUE.length-1?ftueClose():ftueShow(ftueI+1);
+$('#ftueBack').onclick=()=>ftueShow(ftueI-1);$('#ftueSkip').onclick=ftueClose;
+$('#ftue').addEventListener('click',e=>{if(e.target.id==='ftue') ftueClose()});
+document.addEventListener('keydown',e=>{if(!$('#ftue').classList.contains('open')) return;
+  if(e.key==='Escape'){ftueClose();e.stopPropagation()}else if(e.key==='ArrowRight'){ftueShow(ftueI+1);e.preventDefault();e.stopPropagation()}else if(e.key==='ArrowLeft'){ftueShow(ftueI-1);e.preventDefault();e.stopPropagation()}},true);
+$('#bGuide').onclick=()=>{switchApp('layout');ftueOpen()};
+(()=>{let seen=null;try{seen=localStorage.getItem(FTUE_KEY)}catch(e){}if(!seen) setTimeout(ftueOpen,300)})();
+
 window.__eq={renderLProps,visInsetArt,P,renderInsetDebug,screenFor,wdtOf,kid,getS,frameOf,frameDims,docOf,visInset,renderedInset,measureWin,L,openIni,switchApp,windows,toPx,fromPx,iniText,S,ingest,openEntry,item,buildText,dirtyDocs,edit,setPath,applyRect,undo,redo,zip,rebuild,draw,fit};
 resize();
 }
